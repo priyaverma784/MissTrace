@@ -1,16 +1,50 @@
-# React + Vite
+# MissTrace Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite + Tailwind CSS frontend for the MissTrace missing-person identification platform.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Set the backend URL in `.env` (default shown):
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+VITE_API_BASE_URL=http://127.0.0.1:5000
+```
 
-## Expanding the ESLint configuration
+The Flask backend must allow CORS from `http://localhost:5173` (e.g. `flask-cors`).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Backend endpoints used
+
+| Action | Request |
+| --- | --- |
+| Register person | `POST /api/persons` (multipart: name, age, gender, last_seen_location, last_seen_date, photo) |
+| List persons | `GET /api/persons` |
+| Update person | `PUT /api/persons/:id` (JSON) |
+| Delete person | `DELETE /api/persons/:id` |
+| AI search | `POST /api/search` (multipart: photo) |
+
+## Structure
+
+```
+src/
+├── api/         axios instance, typed endpoint functions, response normalizers
+├── components/  reusable UI (Button, Input, Modal, ImageUploader, PersonCard, ...)
+├── context/     toast, role (placeholder auth) and search state
+├── hooks/       usePersons, useDeletePerson, useImageFile
+├── layouts/     UserLayout, AdminLayout
+├── pages/       landing, user/*, admin/*
+├── routes/      RequireRole guard
+├── types/       shared TypeScript types
+└── utils/       formatting + local usage counters
+```
+
+## Notes
+
+- If your backend uses different JSON field names, adjust only `src/api/normalizers.ts`.
+- Person photos are loaded from `VITE_API_BASE_URL` + the path/URL the backend returns.
+- Dashboard "Searches Performed" / "Potential Matches" are counted in the browser, because the backend has no stats endpoint.
+- Authentication is a placeholder (`src/context/AuthContext.tsx`) ready to be replaced.
