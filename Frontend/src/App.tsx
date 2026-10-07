@@ -1,53 +1,30 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { AdminLayout } from './layouts/AdminLayout'
-import { UserLayout } from './layouts/UserLayout'
-import { LandingPage } from './pages/LandingPage'
-import { NotFoundPage } from './pages/NotFoundPage'
-import { AddPersonPage } from './pages/admin/AddPersonPage'
-import { AdminSearchPage } from './pages/admin/AdminSearchPage'
-import { DashboardPage } from './pages/admin/DashboardPage'
-import { EditPersonPage } from './pages/admin/EditPersonPage'
-import { PersonDetailsPage } from './pages/admin/PersonDetailsPage'
-import { PersonsPage } from './pages/admin/PersonsPage'
-import { ReportsPage } from './pages/admin/ReportsPage'
-import { SettingsPage } from './pages/admin/SettingsPage'
-import { UserResultsPage } from './pages/user/UserResultsPage'
-import { UserSearchPage } from './pages/user/UserSearchPage'
-import { RequireRole } from './routes/RequireRole'
+import UserLayout from './layouts/UserLayout'
+import ProtectedRoute from './components/ProtectedRoute'
+import Home from './pages/Home'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import Search from './pages/Search'
+import Results from './pages/Results'
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route element={<UserLayout />}>
+        {/* Public pages */}
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
-      <Route element={<RequireRole role="user" />}>
-        <Route path="/user" element={<UserLayout />}>
-          <Route index element={<UserSearchPage showTips />} />
-          <Route path="search" element={<UserSearchPage />} />
-          <Route path="results" element={<UserResultsPage />} />
+        {/* Pages that need a logged-in user */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/search" element={<Search />} />
+          <Route path="/results" element={<Results />} />
         </Route>
-      </Route>
 
-      {/*
-        Admin pages are not linked from the landing page. They are open at /admin
-        while sign-in is a placeholder. When real auth is added, wrap this block in
-        <Route element={<RequireRole role="admin" />}> again.
-      */}
-      <Route>
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="persons" element={<PersonsPage />} />
-          <Route path="persons/add" element={<AddPersonPage />} />
-          <Route path="persons/:id" element={<PersonDetailsPage />} />
-          <Route path="persons/:id/edit" element={<EditPersonPage />} />
-          <Route path="search" element={<AdminSearchPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
+        {/* Anything else goes back home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-
-      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }
