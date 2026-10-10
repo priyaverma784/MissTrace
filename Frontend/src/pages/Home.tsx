@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
@@ -44,39 +45,42 @@ export default function Home() {
     <>
       {/* HERO */}
       <section className="relative overflow-hidden bg-navy-950 text-white">
-        {/* Globe in the background, fading out towards the text */}
         <div className="pointer-events-none absolute inset-0 opacity-70 sm:opacity-100" aria-hidden>
-          <div className="absolute -right-24 top-1/2 h-[520px] w-[520px] -translate-y-1/2 sm:right-0 lg:h-[680px] lg:w-[680px]">
+          <div className="absolute -right-16 top-1/2 h-[520px] w-[520px] -translate-y-1/2 sm:right-8 lg:right-8 lg:h-[680px] lg:w-[680px]">
             <HeroGlobe />
           </div>
         </div>
+
         <div className="absolute inset-0 bg-gradient-to-r from-navy-950 via-navy-950/85 to-transparent" aria-hidden />
 
-        <div className="page-container relative grid items-center gap-8 py-12 sm:py-16 lg:grid-cols-2 lg:gap-12">
-          <div className="min-w-0 animate-fade-up">
-            <span className="inline-block rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-200">
+        <div className="page-container relative grid min-h-[520px] items-center gap-8 py-12 sm:min-h-[550px] sm:py-16 lg:min-h-[560px] lg:grid-cols-2 lg:gap-12">
+          <div className="min-w-0 animate-fade-up lg:translate-x-2">
+            <span className="inline-block rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-200">
               AI-Powered Missing Person Identification
             </span>
-            <h1 className="mt-5 text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl xl:text-7xl">
+
+            <h1 className="mt-8 text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl xl:text-7xl">
               Find. Identify.
               <br />
               <span className="text-cyan-300">Reconnect.</span>
             </h1>
+
             <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-300 sm:text-lg">
               MissTrace uses AI-powered facial recognition to help identify potential matches for missing persons
               and make the search process faster and more organized.
             </p>
+
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link to="/search" className="btn btn-primary btn-lg">
                 Find a Missing Person <ArrowRight className="h-5 w-5" aria-hidden />
               </Link>
+
               <Link to="/#how-it-works" className="btn btn-light btn-lg">
                 Learn How It Works
               </Link>
             </div>
           </div>
 
-          {/* Face-analysis picture, shown on large screens */}
           <div className="hidden justify-center lg:flex">
             <FaceScan />
           </div>
@@ -86,8 +90,12 @@ export default function Home() {
       {/* HOW IT WORKS */}
       <section id="how-it-works" className="bg-white py-12 sm:py-16">
         <div className="page-container">
-          <h2 className="text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">How MissTrace Works</h2>
-          <p className="mt-2 max-w-2xl text-slate-600">Four simple steps from a photo to a list of potential matches.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">
+            How MissTrace Works
+          </h2>
+          <p className="mt-2 max-w-2xl text-slate-600">
+            Four simple steps from a photo to a list of potential matches.
+          </p>
 
           <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
             {steps.map(({ icon: Icon, title, text }, index) => (
@@ -101,8 +109,10 @@ export default function Home() {
                   </span>
                   <span className="text-sm font-bold text-slate-300">0{index + 1}</span>
                 </div>
+
                 <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
                 <p className="mt-1 text-sm text-slate-600">{text}</p>
+
                 {index < steps.length - 1 && (
                   <ArrowRight
                     className="absolute -right-6 top-1/2 hidden h-5 w-5 -translate-y-1/2 text-slate-300 lg:block"
@@ -118,7 +128,10 @@ export default function Home() {
       {/* FEATURES */}
       <section className="py-12 sm:py-16">
         <div className="page-container">
-          <h2 className="text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">Features</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">
+            Features
+          </h2>
+
           <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, text }) => (
               <li
@@ -128,6 +141,7 @@ export default function Home() {
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-700">
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
+
                 <div className="min-w-0">
                   <h3 className="font-semibold text-slate-900">{title}</h3>
                   <p className="mt-0.5 text-sm text-slate-600">{text}</p>
@@ -145,6 +159,7 @@ export default function Home() {
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
               <ShieldCheck className="h-7 w-7" aria-hidden />
             </span>
+
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-navy-900">Trust &amp; Safety</h2>
               <p className="mt-1 text-slate-700">

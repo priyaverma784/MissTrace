@@ -1,152 +1,155 @@
-import { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import axios from 'axios'
-import { LogOut, Menu, User, X } from 'lucide-react'
-import Logo from './Logo'
 
-interface MeResponse {
-  name?: string
-  user?: { name?: string }
-}
+import { useState } from 'react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import { MapPin, Menu, X, ArrowUpRight } from 'lucide-react'
 
-// Menu links look the same on desktop; the active page is highlighted.
-const linkClass = ({ isActive }: { isActive: boolean }) =>
-  `rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-    isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-  }`
-
-// Bigger, easier-to-tap links for the phone menu.
-const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `flex min-h-[44px] items-center rounded-lg px-3 text-base font-medium ${
-    isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-100'
-  }`
+const navItems = [
+  { label: 'Home', to: '/', end: true },
+  { label: 'About', to: '/#about', end: false },
+  { label: 'Features', to: '/#features', end: false },
+  { label: 'Find Missing Person', to: '/search', end: false },
+  { label: 'Help', to: '/#help', end: false },
+]
 
 export default function Navbar() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [loggedIn, setLoggedIn] = useState(() => Boolean(localStorage.getItem('misstrace_token')))
-  const [name, setName] = useState('User')
   const [menuOpen, setMenuOpen] = useState(false)
+  const location = useLocation()
 
-  // Check the login state every time the page changes (after login or logout).
-  useEffect(() => {
-    setLoggedIn(Boolean(localStorage.getItem('misstrace_token')))
-    setMenuOpen(false)
-  }, [location.pathname])
+  const closeMenu = () => setMenuOpen(false)
 
-  // When logged in, ask the backend for the user's name. If it fails we just show "User".
-  useEffect(() => {
-    if (!loggedIn) return
-    axios
-      .get<MeResponse>('/api/auth/me')
-      .then((res) => {
-        const fullName = res.data.name ?? res.data.user?.name
-        if (fullName) setName(fullName.split(' ')[0])
-      })
-      .catch(() => setName('User'))
-  }, [loggedIn])
+  const isCurrent = (to: string, end?: boolean) => {
+    if (to.startsWith('/#')) {
+      return location.pathname === '/' && location.hash === to.slice(1)
+    }
 
-  const logout = () => {
-    localStorage.removeItem('misstrace_token')
-    setLoggedIn(false)
-    setMenuOpen(false)
-    navigate('/login')
+    return end
+      ? location.pathname === to
+      : to === '/search'
+        ? location.pathname.startsWith('/search')
+        : false
   }
 
+  const linkClass = (active: boolean) =>
+    `whitespace-nowrap px-1.5 py-2 text-[16px] tracking-[-0.2px] transition-colors duration-200 ${
+      active ? 'text-cyan-300' : 'text-slate-300 hover:text-white'
+    }`
+
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="page-container flex h-16 items-center justify-between gap-4">
-        <Logo />
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#061329]/95 text-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+      <div className="mx-auto grid h-[76px] w-full max-w-[1600px] grid-cols-[1fr_auto] items-center gap-4 px-5 sm:px-8 lg:grid-cols-[1fr_auto_1fr] lg:px-10">
+        {/* MissTrace brand */}
+        <Link
+          to="/"
+          onClick={closeMenu}
+          aria-label="MissTrace home"
+          className="group flex w-fit shrink-0 items-center gap-3"
+        >
+          <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-gradient-to-br from-blue-500 to-blue-700 shadow-[0_0_22px_rgba(37,99,235,0.22)] transition group-hover:shadow-[0_0_28px_rgba(34,211,238,0.22)]">
+            <MapPin className="h-[22px] w-[22px] text-white" />
+            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#061329] bg-cyan-300" />
+          </span>
+          <span className="flex flex-col">
+            <span className="font-['Inter',sans-serif] text-[22px] font-extrabold leading-none tracking-[-0.8px] text-white sm:text-2xl">
+              Miss<span className="text-cyan-300">Trace</span>
+            </span>
+            <span className="mt-1 hidden text-[9px] font-semibold uppercase tracking-[2px] text-slate-400 sm:block">
+              Find hope. Reconnect.
+            </span>
+          </span>
+        </Link>
 
-        {/* Desktop menu */}
-        <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">
-          {!loggedIn && (
-            <>
-              <NavLink to="/" end className={linkClass}>
-                Home
-              </NavLink>
-              <Link to="/#how-it-works" className={linkClass({ isActive: false })}>
-                How It Works
-              </Link>
-            </>
-          )}
-          <NavLink to="/search" className={linkClass}>
-            Find a Missing Person
-          </NavLink>
-
-          {loggedIn ? (
-            <>
-              <span className="ml-2 flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
-                <User className="h-4 w-4 text-slate-500" aria-hidden />
-                <span className="max-w-[10rem] truncate">{name}</span>
-              </span>
-              <button type="button" onClick={logout} className="btn btn-outline ml-2 min-h-[40px]">
-                <LogOut className="h-4 w-4" aria-hidden /> Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <NavLink to="/login" className={linkClass}>
-                Login
-              </NavLink>
-              <Link to="/signup" className="btn btn-primary ml-2 min-h-[40px]">
-                Sign Up
-              </Link>
-            </>
-          )}
+        {/* Larger center navigation */}
+        <nav
+          aria-label="Main navigation"
+          className="ml-[-28px] hidden items-center justify-center gap-5 lg:flex xl:gap-7"
+        >
+          {navItems.map((item) => (
+            <NavLink
+              key={item.label}
+              to={item.to}
+              end={item.end}
+              className={linkClass(isCurrent(item.to, item.end))}
+            >
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
 
-        {/* Phone / tablet menu button */}
+        {/* Login and signup */}
+        <div className="hidden shrink-0 items-center justify-end gap-3 lg:flex">
+          <Link
+            to="/login"
+            className="rounded-lg border border-blue-400/40 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-cyan-300/70 hover:text-white"
+          >
+            Login
+          </Link>
+
+          <Link
+            to="/signup"
+            className="group inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
+          >
+            Sign Up
+            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+          </Link>
+        </div>
+
+        {/* Mobile menu button */}
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           aria-expanded={menuOpen}
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-white transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 lg:hidden"
         >
-          {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
-      {/* Phone / tablet dropdown */}
+      {/* Mobile dropdown */}
       {menuOpen && (
-        <nav aria-label="Mobile" className="border-t border-slate-100 bg-white lg:hidden">
-          <div className="page-container flex flex-col gap-1 py-3">
-            {!loggedIn && (
-              <>
-                <NavLink to="/" end className={mobileLinkClass}>
-                  Home
-                </NavLink>
-                <Link to="/#how-it-works" className={mobileLinkClass({ isActive: false })}>
-                  How It Works
-                </Link>
-              </>
-            )}
-            <NavLink to="/search" className={mobileLinkClass}>
-              Find a Missing Person
-            </NavLink>
+        <div className="border-t border-white/10 bg-[#07162d] px-5 pb-5 pt-3 shadow-2xl lg:hidden sm:px-8">
+          <nav
+            aria-label="Mobile navigation"
+            className="mx-auto flex max-w-xl flex-col gap-1"
+          >
+            {navItems.map((item) => (
+              <NavLink
+                key={item.label}
+                to={item.to}
+                end={item.end}
+                onClick={closeMenu}
+                className={() =>
+                  `${linkClass(isCurrent(item.to, item.end))} flex min-h-12 items-center px-3 text-base`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
 
-            {loggedIn ? (
-              <>
-                <p className="flex min-h-[44px] items-center gap-2 px-3 text-base text-slate-500">
-                  <User className="h-4 w-4" aria-hidden /> {name}
-                </p>
-                <button type="button" onClick={logout} className="btn btn-outline w-full">
-                  <LogOut className="h-4 w-4" aria-hidden /> Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to="/login" className={mobileLinkClass}>
-                  Login
-                </NavLink>
-                <Link to="/signup" className="btn btn-primary mt-1 w-full">
-                  Sign Up
-                </Link>
-              </>
-            )}
-          </div>
-        </nav>
+            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-white/10 pt-4">
+              <Link
+                to="/login"
+                onClick={closeMenu}
+                className="flex min-h-11 items-center justify-center rounded-lg border border-blue-400/40 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-300/70"
+              >
+                Login
+              </Link>
+
+              <Link
+                to="/signup"
+                onClick={closeMenu}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-500"
+              >
+                Sign Up
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <p className="mt-3 text-center text-[10px] font-medium uppercase tracking-[1.8px] text-slate-500">
+              Find hope. Reconnect.
+            </p>
+          </nav>
+        </div>
       )}
     </header>
   )

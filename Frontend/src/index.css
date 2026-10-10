@@ -55,3 +55,18 @@
     @apply border-red-400 focus:border-red-500 focus:ring-red-200;
   }
 }
+
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(280px);
+  }
+}
+
+.animate-scan-line {
+  animation: scan-line 3s linear infinite alternate;
+}
+
