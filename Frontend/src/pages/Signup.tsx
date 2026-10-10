@@ -1,8 +1,28 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  ScanFace,
+  ShieldCheck,
+  UserRoundPlus,
+} from 'lucide-react'
+
+interface SignupResponse {
+  token?: string
+  access_token?: string
+}
+
+interface LocationState {
+  message?: string
+  transition?: string
+}
 
 interface FormErrors {
   name?: string
@@ -12,48 +32,92 @@ interface FormErrors {
 }
 
 function getSignupError(error: unknown): string {
-  if (axios.isAxiosError<{ error?: string; message?: string }>(error)) {
-    if (!error.response) return 'Unable to connect to the MissTrace server.'
-    const serverText = String(error.response.data?.error ?? error.response.data?.message ?? '')
-    if (error.response.status === 409 || /already|exist|duplicate|unique/i.test(serverText)) {
-      return 'An account with this email already exists.'
+  if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      return 'Unable to connect to the MissTrace server.'
     }
+
+    const data = error.response.data
+    return (
+      data?.message ||
+      data?.error ||
+      'Unable to create your account. Please try again.'
+    )
   }
+
   return 'Something went wrong. Please try again.'
 }
 
 export default function Signup() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const state = location.state as LocationState | null
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [serverError, setServerError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [leavingForLogin, setLeavingForLogin] = useState(false)
 
-  const handleSubmit = async (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (loading) return
 
-    // 1. Check the form
+    if (loading || leavingForLogin) return
+
     const newErrors: FormErrors = {}
-    if (!name.trim()) newErrors.name = 'Please enter your full name.'
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) newErrors.email = 'Please enter a valid email address.'
-    if (!password) newErrors.password = 'Please enter a password.'
-    else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters.'
-    if (confirmPassword !== password) newErrors.confirmPassword = 'Passwords do not match.'
+
+    if (!name.trim()) {
+      newErrors.name = 'Please enter your full name.'
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      newErrors.email = 'Please enter a valid email address.'
+    }
+
+    if (!password) {
+      newErrors.password = 'Please enter a password.'
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must contain at least 8 characters.'
+    }
+
+    if (!confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password.'
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match.'
+    }
+
     setErrors(newErrors)
+
     if (Object.keys(newErrors).length > 0) return
 
-    // 2. Create the account (we never send the "confirm password" field)
     setLoading(true)
     setServerError('')
+
     try {
-      await axios.post('/api/auth/signup', { name: name.trim(), email: email.trim(), password })
-      navigate('/login', { state: { message: 'Account created successfully. Please sign in.' } })
+      const res = await axios.post<SignupResponse>('/api/auth/signup', {
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      })
+
+      const token = res.data.token ?? res.data.access_token
+
+      if (token) {
+        localStorage.setItem('misstrace_token', token)
+        navigate('/search', { replace: true })
+      } else {
+        navigate('/login', {
+          replace: true,
+          state: {
+            message: 'Account created successfully. Please sign in.',
+          },
+        })
+      }
     } catch (error: unknown) {
       setServerError(getSignupError(error))
     } finally {
@@ -61,113 +125,329 @@ export default function Signup() {
     }
   }
 
+  const handleLoginNavigation = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+  ) => {
+    event.preventDefault()
+
+    if (loading || leavingForLogin) return
+
+    setLeavingForLogin(true)
+
+    window.setTimeout(() => {
+      navigate('/login', {
+        state: { transition: 'slide' },
+      })
+    }, 350)
+  }
+
   return (
-    <section className="page-container flex justify-center py-10 sm:py-14">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-card sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight text-navy-900">Create Your Account</h1>
-        <p className="mt-1 text-sm text-slate-600">Create an account to search for missing persons with MissTrace.</p>
+    <section className="relative isolate flex min-h-[calc(100vh-76px)] items-center justify-center overflow-hidden bg-slate-50 px-4 py-10 sm:py-14">
+      {/* Animated background decoration */}
+      <div
+        className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-cyan-200/40 blur-3xl"
+        aria-hidden="true"
+      />
 
-        {serverError && (
-          <p role="alert" className="mt-5 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {serverError}
+      <div
+        className="pointer-events-none absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-blue-200/40 blur-3xl"
+        aria-hidden="true"
+      />
+
+      {/* Signup content */}
+      <div
+        className={`relative w-full max-w-md transition-all duration-300 ease-in-out ${
+          leavingForLogin
+            ? 'translate-x-12 scale-[0.97] opacity-0'
+            : 'translate-x-0 scale-100 animate-[authEnter_500ms_ease-out_both] opacity-100'
+        }`}
+      >
+        {/* Brand heading */}
+        <div className="mb-7 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-navy-950 text-cyan-300 shadow-lg shadow-blue-950/15 transition-transform duration-300 hover:scale-105">
+            <ScanFace
+              className="h-9 w-9"
+              strokeWidth={1.7}
+              aria-hidden="true"
+            />
+          </div>
+
+          <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-navy-950">
+            Create Account
+          </h1>
+
+          <p className="mt-2 text-sm text-slate-600">
+            Join MissTrace and help reconnect missing people with their families.
           </p>
-        )}
+        </div>
 
-        <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
-          <div>
-            <label htmlFor="name" className="field-label">
-              Full Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              autoComplete="name"
-              placeholder="Enter your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={loading}
-              className={`field ${errors.name ? 'field-error' : ''}`}
+        {/* Signup card */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-900/[0.06] sm:p-8">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
+            <ShieldCheck
+              className="h-5 w-5 shrink-0 text-cyan-700"
+              aria-hidden="true"
             />
-            {errors.name && <p className="mt-1.5 text-sm text-red-600">{errors.name}</p>}
+            <p className="text-xs leading-relaxed text-slate-700">
+              Create a secure account to access MissTrace services.
+            </p>
           </div>
 
-          <div>
-            <label htmlFor="email" className="field-label">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={loading}
-              className={`field ${errors.email ? 'field-error' : ''}`}
-            />
-            {errors.email && <p className="mt-1.5 text-sm text-red-600">{errors.email}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="password" className="field-label">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-                className={`field pr-11 ${errors.password ? 'field-error' : ''}`}
+          {state?.message && (
+            <p className="mb-5 flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((show) => !show)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              <span>{state.message}</span>
+            </p>
+          )}
+
+          {serverError && (
+            <p
+              role="alert"
+              className="mb-5 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            >
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
+              <span>{serverError}</span>
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            {/* Full name */}
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-semibold text-slate-800"
               >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
+                Full Name
+              </label>
+
+              <input
+                id="name"
+                type="text"
+                autoComplete="name"
+                placeholder="Enter your full name"
+                value={name}
+                onChange={(event) => {
+                  setName(event.target.value)
+                  setErrors((prev) => ({
+                    ...prev,
+                    name: undefined,
+                  }))
+                }}
+                disabled={loading || leavingForLogin}
+                aria-invalid={Boolean(errors.name)}
+                className={`w-full rounded-xl border bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  errors.name
+                    ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
+                    : 'border-slate-200 focus:border-cyan-500 focus:ring-cyan-100'
+                }`}
+              />
+
+              {errors.name && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.name}</p>
+              )}
             </div>
-            {errors.password && <p className="mt-1.5 text-sm text-red-600">{errors.password}</p>}
+
+            {/* Email */}
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-semibold text-slate-800"
+              >
+                Email Address
+              </label>
+
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setErrors((prev) => ({
+                    ...prev,
+                    email: undefined,
+                  }))
+                }}
+                disabled={loading || leavingForLogin}
+                aria-invalid={Boolean(errors.email)}
+                className={`w-full rounded-xl border bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  errors.email
+                    ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
+                    : 'border-slate-200 focus:border-cyan-500 focus:ring-cyan-100'
+                }`}
+              />
+
+              {errors.email && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.email}</p>
+              )}
+            </div>
+
+            {/* Password */}
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-semibold text-slate-800"
+              >
+                Password
+              </label>
+
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    setErrors((prev) => ({
+                      ...prev,
+                      password: undefined,
+                    }))
+                  }}
+                  disabled={loading || leavingForLogin}
+                  aria-invalid={Boolean(errors.password)}
+                  className={`w-full rounded-xl border bg-slate-50 px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    errors.password
+                      ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
+                      : 'border-slate-200 focus:border-cyan-500 focus:ring-cyan-100'
+                  }`}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((show) => !show)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+
+              {errors.password && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.password}
+                </p>
+              )}
+            </div>
+
+            {/* Confirm password */}
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="mb-2 block text-sm font-semibold text-slate-800"
+              >
+                Confirm Password
+              </label>
+
+              <div className="relative">
+                <input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value)
+                    setErrors((prev) => ({
+                      ...prev,
+                      confirmPassword: undefined,
+                    }))
+                  }}
+                  disabled={loading || leavingForLogin}
+                  aria-invalid={Boolean(errors.confirmPassword)}
+                  className={`w-full rounded-xl border bg-slate-50 px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    errors.confirmPassword
+                      ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
+                      : 'border-slate-200 focus:border-cyan-500 focus:ring-cyan-100'
+                  }`}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowConfirmPassword((show) => !show)
+                  }
+                  aria-label={
+                    showConfirmPassword
+                      ? 'Hide confirm password'
+                      : 'Show confirm password'
+                  }
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+
+              {errors.confirmPassword && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.confirmPassword}
+                </p>
+              )}
+            </div>
+
+            {/* Create account button */}
+            <button
+              type="submit"
+              disabled={loading || leavingForLogin}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-navy-950/15 transition duration-300 hover:-translate-y-0.5 hover:bg-navy-800 hover:shadow-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Creating account...
+                </>
+              ) : (
+                <>
+                  <UserRoundPlus className="h-4 w-4" aria-hidden="true" />
+                  Create Account
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Login divider */}
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="text-xs text-slate-400">ALREADY REGISTERED?</span>
+            <div className="h-px flex-1 bg-slate-200" />
           </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="field-label">
-              Confirm Password
-            </label>
-            <input
-              id="confirmPassword"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="new-password"
-              placeholder="Type your password again"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              disabled={loading}
-              className={`field ${errors.confirmPassword ? 'field-error' : ''}`}
-            />
-            {errors.confirmPassword && <p className="mt-1.5 text-sm text-red-600">{errors.confirmPassword}</p>}
-          </div>
-
-          <button type="submit" disabled={loading} className="btn btn-primary w-full">
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Creating account...
-              </>
-            ) : (
-              'Create Account'
-            )}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-600">
-          Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-blue-600 hover:underline">
-            Sign In
+          {/* Login navigation */}
+          <Link
+            to="/login"
+            onClick={handleLoginNavigation}
+            aria-disabled={loading || leavingForLogin}
+            className={`group flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-navy-950 transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50 hover:shadow-md ${
+              loading || leavingForLogin
+                ? 'pointer-events-none opacity-60'
+                : ''
+            }`}
+          >
+            Sign In to Your Account
+            <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
           </Link>
+        </div>
+
+        <p className="mt-5 text-center text-xs leading-relaxed text-slate-500">
+          MissTrace · AI-generated matches are potential matches only and must
+          be independently verified.
         </p>
       </div>
     </section>
