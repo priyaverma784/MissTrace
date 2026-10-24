@@ -1,4 +1,7 @@
+
 import { Link, Navigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import axios from 'axios'
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,15 +19,102 @@ interface ResultsLocationState {
   results?: SearchResult[]
 }
 
+interface UserResponse {
+  user: {
+    role: string
+  }
+}
+
+function isValidResult(value: unknown): value is SearchResult {
+  if (typeof value !== 'object' || value === null) return false
+
+  const person = value as Partial<SearchResult>
+
+  return (
+    typeof person.id === 'number' &&
+    typeof person.name === 'string' &&
+    typeof person.similarity === 'number' &&
+    Number.isFinite(person.similarity) &&
+    person.similarity >= 0 &&
+    person.similarity <= 100
+  )
+}
+
 export default function Results() {
   const location = useLocation()
   const state = location.state as ResultsLocationState | null
+
+  const [authorized, setAuthorized] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    const token = localStorage.getItem('misstrace_token')
+
+    if (!token) {
+      setChecking(false)
+      return
+    }
+
+    axios
+      .get<UserResponse>('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      .then((response) => {
+        if (active) {
+          setAuthorized(response.data.user.role === 'admin')
+        }
+      })
+      .catch(() => {
+        if (active) {
+          localStorage.removeItem('misstrace_token')
+          setAuthorized(false)
+        }
+      })
+      .finally(() => {
+        if (active) setChecking(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (checking) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"
+          role="status"
+          aria-label="Verifying access"
+        />
+      </div>
+    )
+  }
+
+  if (!localStorage.getItem('misstrace_token')) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: '/search', message: 'Please sign in to continue.' }}
+      />
+    )
+  }
+
+  if (!authorized) {
+    return <Navigate to="/" replace />
+  }
 
   if (!state || !Array.isArray(state.results)) {
     return <Navigate to="/search" replace />
   }
 
   const results = state.results
+    .filter(isValidResult)
+    .sort((a, b) => b.similarity - a.similarity)
 
   if (results.length === 0) {
     return (
@@ -48,11 +138,11 @@ export default function Results() {
           </h1>
 
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
-            We couldn&apos;t find a sufficiently similar face in the current
+            We couldn't find a sufficiently similar face in the current
             records. Try another photograph with a clear, front-facing view.
           </p>
 
-          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+          <div className="mt-7 flex justify-center">
             <Link
               to="/search"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-navy-800"
@@ -162,7 +252,7 @@ export default function Results() {
               <p className="mt-1 text-sm leading-6 text-blue-900/80">
                 AI-generated matches are suggestions, not confirmed
                 identifications. Similarity scores are not proof of identity.
-                Any potential match must be independently verified by
+                Every potential match must be independently verified by
                 authorized personnel before action is taken.
               </p>
             </div>

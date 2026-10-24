@@ -50,7 +50,7 @@ function toResults(data: unknown): SearchResult[] {
   const list: unknown = Array.isArray(data)
     ? data
     : isObject(data)
-      ? (data.results ?? data.matches)
+      ? data.results ?? data.matches
       : []
 
   if (!Array.isArray(list)) return []
@@ -59,9 +59,7 @@ function toResults(data: unknown): SearchResult[] {
     .filter(isObject)
     .map((item): SearchResult => {
       const score =
-        asNumber(
-          item.similarity ?? item.similarity_score ?? item.score,
-        ) ?? 0
+        asNumber(item.similarity ?? item.similarity_score ?? item.score) ?? 0
 
       const similarity = Math.max(
         0,
@@ -78,7 +76,7 @@ function toResults(data: unknown): SearchResult[] {
 
       const photoUrl = !photo
         ? null
-        : /^(https?:|data:)/i.test(photo)
+        : /^(https?:|data:|blob:)/i.test(photo)
           ? photo
           : `http://127.0.0.1:5000/${photo
               .replace(/\\/g, '/')
@@ -106,30 +104,34 @@ function toResults(data: unknown): SearchResult[] {
 function getSearchError(error: unknown): string {
   if (axios.isAxiosError<{ error?: string; message?: string }>(error)) {
     if (!error.response) {
-      return 'Unable to connect to the MissTrace server.'
+      return 'Unable to connect to the MissTrace server. Please try again.'
     }
 
+    const status = error.response.status
     const serverText = String(
-      error.response.data?.error ??
-        error.response.data?.message ??
-        '',
+      error.response.data?.error ?? error.response.data?.message ?? '',
     )
 
-    if (/no face|face not|0 faces/i.test(serverText)) {
-      return 'No face was detected in this image.'
+    if (status === 403) {
+      return 'Access denied. Only authorized administrators can search the confidential missing-person database.'
     }
 
-    if (
-      error.response.status === 400 ||
-      error.response.status === 415
-    ) {
+    if (status === 404 && /user not found/i.test(serverText)) {
+      return 'Your account could not be verified. Please sign in again.'
+    }
+
+    if (/no face|face not|0 faces/i.test(serverText)) {
+      return 'No face was detected in this image. Please upload a clearer photo.'
+    }
+
+    if (status === 400 || status === 415) {
       return (
         serverText ||
         'We could not read this image. Please try a different photo.'
       )
     }
 
-    if (error.response.status >= 500) {
+    if (status >= 500) {
       return 'The server encountered an error. Please try again later.'
     }
   }
@@ -152,6 +154,18 @@ export default function Search() {
       return
     }
 
+    const token = localStorage.getItem('misstrace_token')
+
+    if (!token) {
+      navigate('/login', {
+        state: {
+          from: '/search',
+          message: 'Please sign in to continue.',
+        },
+      })
+      return
+    }
+
     setError('')
     setLoading(true)
 
@@ -159,17 +173,11 @@ export default function Search() {
       const formData = new FormData()
       formData.append('photo', file)
 
-      const token = localStorage.getItem('misstrace_token')
-
-      const response = await axios.post<unknown>(
-        '/api/search',
-        formData,
-        {
-          headers: token
-            ? { Authorization: `Bearer ${token}` }
-            : undefined,
+      const response = await axios.post<unknown>('/api/search', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      )
+      })
 
       const results = toResults(response.data)
 
@@ -179,8 +187,7 @@ export default function Search() {
     } catch (err: unknown) {
       if (
         axios.isAxiosError(err) &&
-        (err.response?.status === 401 ||
-          err.response?.status === 422)
+        (err.response?.status === 401 || err.response?.status === 422)
       ) {
         localStorage.removeItem('misstrace_token')
 
@@ -207,7 +214,8 @@ export default function Search() {
       </h1>
 
       <p className="mt-2 max-w-2xl text-slate-600">
-        Upload a clear photo and let MissTrace search for potential matches.
+        Upload a clear photo to search for potential matches in the MissTrace
+        database.
       </p>
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[1fr_360px]">
@@ -276,7 +284,7 @@ export default function Search() {
               aria-hidden
             />
             <p>
-              AI results indicate potential matches and should be verified
+              Search results indicate potential matches and must be verified
               by authorized personnel. A similarity score is not proof of
               identity.
             </p>

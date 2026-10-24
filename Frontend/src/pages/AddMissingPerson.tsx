@@ -1,4 +1,6 @@
+
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -24,13 +26,43 @@ export default function AddMissingPerson() {
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     if (loading) return
 
+    const token = localStorage.getItem('misstrace_token')
+
+    if (!token) {
+      navigate('/login', {
+        replace: true,
+        state: {
+          from: '/add-person',
+          message: 'Please log in with an administrator account.',
+        },
+      })
+      return
+    }
+
+    if (!name.trim()) {
+      setError('Please enter the missing person’s name.')
+      return
+    }
+
     if (!photo) {
       setError('Please upload a photograph.')
+      return
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+
+    if (!allowedTypes.includes(photo.type)) {
+      setError('Please upload a JPG, PNG, or WebP image.')
+      return
+    }
+
+    if (photo.size > 10 * 1024 * 1024) {
+      setError('Please select an image smaller than 10 MB.')
       return
     }
 
@@ -41,21 +73,23 @@ export default function AddMissingPerson() {
     try {
       const formData = new FormData()
       formData.append('name', name.trim())
+
       if (age) formData.append('age', age)
       if (gender) formData.append('gender', gender)
-      if (location.trim()) formData.append('last_seen_location', location.trim())
+      if (location.trim()) {
+        formData.append('last_seen_location', location.trim())
+      }
       if (date) formData.append('last_seen_date', date)
+
       formData.append('photo', photo)
 
-      const token = localStorage.getItem('misstrace_token')
-
-      const response = await axios.post(
+      const response = await axios.post<{ message?: string }>(
         '/api/persons',
         formData,
         {
-          headers: token
-            ? { Authorization: `Bearer ${token}` }
-            : undefined,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
       )
 
@@ -77,21 +111,39 @@ export default function AddMissingPerson() {
       if (fileInput) fileInput.value = ''
 
       window.setTimeout(() => {
-        navigate('/search')
-      }, 1500)
+        navigate('/missing-persons', { replace: true })
+      }, 1200)
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        if (!err.response) {
-          setError('Unable to connect to the MissTrace server.')
-        } else {
-          const message =
-            err.response.data?.error ??
-            err.response.data?.message
+        const status = err.response?.status
+        const responseData = err.response?.data as
+          | { error?: string; message?: string }
+          | undefined
 
+        if (!err.response) {
           setError(
-            typeof message === 'string'
-              ? message
-              : 'Unable to add this record. Please try again.',
+            'Unable to connect to MissTrace. Check that the backend is running.',
+          )
+        } else if (status === 401 || status === 422) {
+          localStorage.removeItem('misstrace_token')
+
+          navigate('/login', {
+            replace: true,
+            state: {
+              from: '/add-person',
+              message: 'Your session has expired. Please log in again.',
+            },
+          })
+          return
+        } else if (status === 403) {
+          setError(
+            'Access denied. Only authorized administrators can add missing-person records.',
+          )
+        } else {
+          setError(
+            responseData?.error ??
+              responseData?.message ??
+              'Unable to add this record. Please try again.',
           )
         }
       } else {
@@ -105,11 +157,11 @@ export default function AddMissingPerson() {
   return (
     <section className="page-container py-8 sm:py-12">
       <Link
-        to="/search"
+        to="/missing-persons"
         className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-cyan-700"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to Search
+        Back to Missing Persons
       </Link>
 
       <div className="mx-auto max-w-3xl">
@@ -287,11 +339,26 @@ export default function AddMissingPerson() {
                       const selectedFile = event.target.files?.[0] ?? null
                       setError('')
 
-                      if (selectedFile && selectedFile.size > 10 * 1024 * 1024) {
-                        setPhoto(null)
-                        event.target.value = ''
-                        setError('Please select an image smaller than 10 MB.')
-                        return
+                      if (selectedFile) {
+                        const allowedTypes = [
+                          'image/jpeg',
+                          'image/png',
+                          'image/webp',
+                        ]
+
+                        if (!allowedTypes.includes(selectedFile.type)) {
+                          setPhoto(null)
+                          event.target.value = ''
+                          setError('Please upload a JPG, PNG, or WebP image.')
+                          return
+                        }
+
+                        if (selectedFile.size > 10 * 1024 * 1024) {
+                          setPhoto(null)
+                          event.target.value = ''
+                          setError('Please select an image smaller than 10 MB.')
+                          return
+                        }
                       }
 
                       setPhoto(selectedFile)
@@ -333,7 +400,10 @@ export default function AddMissingPerson() {
           >
             {loading ? (
               <>
-                <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+                <LoaderCircle
+                  className="h-5 w-5 animate-spin"
+                  aria-hidden="true"
+                />
                 Adding Record...
               </>
             ) : (

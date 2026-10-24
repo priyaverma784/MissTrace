@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   ArrowLeft,
@@ -17,7 +17,6 @@ interface MissingPerson {
   name: string
   age: number | string | null
   gender: string | null
-  photo_path: string | null
   last_seen_location: string | null
   last_seen_date: string | null
 }
@@ -36,35 +35,104 @@ function formatDate(value: string | null) {
   })
 }
 
+function getErrorMessage(error: unknown): string {
+  if (!axios.isAxiosError(error)) {
+    return 'Something went wrong while loading the records.'
+  }
+
+  if (!error.response) {
+    return 'Unable to connect to the MissTrace server. Check that the backend is running.'
+  }
+
+  const status = error.response.status
+
+  if (status === 401 || status === 422) {
+    return 'Your session has expired. Please log in again.'
+  }
+
+  if (status === 403) {
+    return 'Access denied. Only authorized administrators can view missing-person records.'
+  }
+
+  if (status >= 500) {
+    return 'The server encountered an error. Please try again later.'
+  }
+
+  const data = error.response.data as
+    | { error?: string; message?: string }
+    | undefined
+
+  return (
+    data?.error ||
+    data?.message ||
+    'Unable to load missing-person records. Please try again.'
+  )
+}
+
 export default function MissingPersons() {
+  const navigate = useNavigate()
+
   const [persons, setPersons] = useState<MissingPerson[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const fetchPersons = async () => {
+  const fetchPersons = useCallback(async () => {
     setLoading(true)
     setError('')
 
+    const token = localStorage.getItem('misstrace_token')
+
+    if (!token) {
+      setPersons([])
+      setError('Please log in to access missing-person records.')
+      setLoading(false)
+      return
+    }
+
     try {
-      const response = await axios.get<MissingPerson[]>('/api/persons')
-      setPersons(response.data)
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        setError(
-          err.response?.data?.error ||
-            'Unable to load missing-person records. Please try again.',
-        )
-      } else {
-        setError('Something went wrong while loading the records.')
+      const response = await axios.get<MissingPerson[]>('/api/persons', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!Array.isArray(response.data)) {
+        throw new Error('Unexpected response format from the server.')
       }
+
+      setPersons(response.data)
+    } catch (err: unknown) {
+      if (
+        axios.isAxiosError(err) &&
+        (err.response?.status === 401 || err.response?.status === 422)
+      ) {
+        localStorage.removeItem('misstrace_token')
+        setPersons([])
+        navigate('/login', {
+          replace: true,
+          state: {
+            from: '/missing-persons',
+            message: 'Your session has expired. Please log in again.',
+          },
+        })
+        return
+      }
+
+      setPersons([])
+      setError(
+        err instanceof Error &&
+          !axios.isAxiosError(err)
+          ? err.message
+          : getErrorMessage(err),
+      )
     } finally {
       setLoading(false)
     }
-  }
+  }, [navigate])
 
   useEffect(() => {
     void fetchPersons()
-  }, [])
+  }, [fetchPersons])
 
   return (
     <main className="min-h-screen bg-[#061329] px-4 py-10 text-white sm:px-8 lg:px-12">
@@ -119,7 +187,9 @@ export default function MissingPersons() {
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-300/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+            />
             Refresh
           </button>
         </div>
@@ -134,28 +204,45 @@ export default function MissingPersons() {
         ) : error ? (
           <div className="rounded-2xl border border-red-400/20 bg-red-400/5 p-8 text-center">
             <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-red-300" />
+
             <p className="font-semibold text-white">
               Could not load records
             </p>
+
             <p className="mt-2 text-sm text-slate-400">{error}</p>
-            <button
-              type="button"
-              onClick={() => void fetchPersons()}
-              className="mt-5 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500"
-            >
-              Try Again
-            </button>
+
+            {localStorage.getItem('misstrace_token') && (
+              <button
+                type="button"
+                onClick={() => void fetchPersons()}
+                className="mt-5 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500"
+              >
+                Try Again
+              </button>
+            )}
+
+            {!localStorage.getItem('misstrace_token') && (
+              <Link
+                to="/login"
+                state={{ from: '/missing-persons' }}
+                className="mt-5 inline-flex rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold hover:bg-blue-500"
+              >
+                Log In
+              </Link>
+            )}
           </div>
         ) : persons.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-16 text-center">
             <Users className="mx-auto mb-4 h-12 w-12 text-slate-500" />
+
             <h2 className="text-xl font-semibold">
               No Records Available
             </h2>
+
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
-              No missing-person records have been added yet. You can add the
-              first record to the directory.
+              No missing-person records have been added yet.
             </p>
+
             <Link
               to="/add-person"
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500"
@@ -180,6 +267,7 @@ export default function MissingPersons() {
                     <h2 className="truncate text-lg font-semibold text-white">
                       {person.name}
                     </h2>
+
                     <p className="mt-1 text-xs text-slate-500">
                       Record ID: {person.id}
                     </p>
@@ -203,6 +291,7 @@ export default function MissingPersons() {
 
                   <div className="flex items-start gap-3 text-sm">
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
+
                     <div>
                       <p className="text-slate-400">Last seen location</p>
                       <p className="mt-1 break-words text-slate-200">
@@ -213,6 +302,7 @@ export default function MissingPersons() {
 
                   <div className="flex items-start gap-3 text-sm">
                     <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
+
                     <div>
                       <p className="text-slate-400">Last seen date</p>
                       <p className="mt-1 text-slate-200">
