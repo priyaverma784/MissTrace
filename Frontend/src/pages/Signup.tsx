@@ -16,10 +16,11 @@ import {
 
 interface SignupResponse {
   message: string
-  user: {
+  user?: {
     id: number
     name: string
     email: string
+    role?: string
   }
   error?: string
 }
@@ -42,14 +43,26 @@ function getSignupError(error: unknown): string {
       return 'Unable to connect to the MissTrace server. Please check that the backend is running.'
     }
 
+    const status = error.response.status
     const data = error.response.data as
       | { error?: string; message?: string }
       | undefined
 
-    if (data?.error) return data.error
-    if (data?.message) return data.message
+    const message = data?.error || data?.message
 
-    return 'Unable to create your account. Please try again.'
+    if (status === 409) {
+      return message || 'An account with this email already exists. Please sign in instead.'
+    }
+
+    if (status === 400 || status === 422) {
+      return message || 'Please check your details and try again.'
+    }
+
+    if (status >= 500) {
+      return 'The server encountered an error. Please try again later.'
+    }
+
+    return message || 'Unable to create your account. Please try again.'
   }
 
   return 'Something went wrong. Please try again.'
@@ -101,11 +114,11 @@ export default function Signup() {
     }
 
     setErrors(newErrors)
+    setServerError('')
 
     if (Object.keys(newErrors).length > 0) return
 
     setLoading(true)
-    setServerError('')
 
     try {
       const response = await axios.post<SignupResponse>(

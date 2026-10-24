@@ -19,7 +19,6 @@ export default function ProtectedRoute({
   adminOnly = false,
 }: ProtectedRouteProps) {
   const location = useLocation()
-  const token = localStorage.getItem('misstrace_token')
 
   const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -27,10 +26,18 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     let active = true
+    const token = localStorage.getItem('misstrace_token')
+
+    setLoading(true)
+    setUnauthorized(false)
+    setRole(null)
 
     if (!token) {
       setLoading(false)
-      return
+      setUnauthorized(true)
+      return () => {
+        active = false
+      }
     }
 
     axios
@@ -51,36 +58,37 @@ export default function ProtectedRoute({
         }
       })
       .finally(() => {
-        if (active) {
-          setLoading(false)
-        }
+        if (active) setLoading(false)
       })
 
     return () => {
       active = false
     }
-  }, [token])
-
-  if (!token) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location.pathname }}
-      />
-    )
-  }
+  }, [location.pathname])
 
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"
+          role="status"
+          aria-label="Verifying authentication"
+        />
       </div>
     )
   }
 
-  if (unauthorized) {
-    return <Navigate to="/login" replace />
+  if (unauthorized || !localStorage.getItem('misstrace_token')) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{
+          from: location.pathname,
+          message: 'Please sign in to continue.',
+        }}
+      />
+    )
   }
 
   if (adminOnly && role !== 'admin') {

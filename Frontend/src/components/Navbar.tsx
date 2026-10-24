@@ -15,6 +15,7 @@ interface User {
   id: number
   name: string
   email: string
+  role?: string
 }
 
 interface UserResponse {
@@ -31,6 +32,7 @@ export default function Navbar() {
   const closeMenu = () => setMenuOpen(false)
 
   useEffect(() => {
+    let cancelled = false
     const token = localStorage.getItem('misstrace_token')
 
     if (!token) {
@@ -45,9 +47,13 @@ export default function Navbar() {
         },
       })
       .then((response) => {
-        setUser(response.data.user)
+        if (!cancelled) {
+          setUser(response.data.user)
+        }
       })
       .catch((error) => {
+        if (cancelled) return
+
         if (
           error.response?.status === 401 ||
           error.response?.status === 422
@@ -56,13 +62,17 @@ export default function Navbar() {
           setUser(null)
         }
       })
-  }, [location.pathname])
+
+    return () => {
+      cancelled = true
+    }
+  }, [location.pathname, location.key])
 
   const handleLogout = () => {
     localStorage.removeItem('misstrace_token')
     setUser(null)
     closeMenu()
-    navigate('/')
+    navigate('/', { replace: true })
   }
 
   const isCurrent = (to: string, end?: boolean) => {
@@ -70,11 +80,18 @@ export default function Navbar() {
       return location.pathname === '/' && location.hash === to.slice(1)
     }
 
-    return end
-      ? location.pathname === to
-      : to === '/search'
-        ? location.pathname.startsWith('/search')
-        : false
+    if (end) {
+      return location.pathname === to
+    }
+
+    if (to === '/search') {
+      return (
+        location.pathname === '/search' ||
+        location.pathname === '/results'
+      )
+    }
+
+    return location.pathname === to
   }
 
   const linkClass = (active: boolean) =>
@@ -95,12 +112,19 @@ export default function Navbar() {
         <p className="max-w-32 truncate text-sm font-semibold text-white">
           {user?.name}
         </p>
+
+        {user?.role === 'admin' && (
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+            Admin
+          </p>
+        )}
+
         <button
           type="button"
           onClick={handleLogout}
           className="flex items-center gap-1 text-xs text-slate-400 transition hover:text-cyan-300"
         >
-          <LogOut className="h-3 w-3" />
+          <LogOut className="h-3 w-3" aria-hidden="true" />
           Logout
         </button>
       </div>
@@ -177,7 +201,11 @@ export default function Navbar() {
           aria-expanded={menuOpen}
           className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-white transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 lg:hidden"
         >
-          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {menuOpen ? (
+            <X className="h-5 w-5" />
+          ) : (
+            <Menu className="h-5 w-5" />
+          )}
         </button>
       </div>
 

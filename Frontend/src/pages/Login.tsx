@@ -17,10 +17,11 @@ interface LoginResponse {
   message: string
   access_token?: string
   token?: string
-  user: {
+  user?: {
     id: number
     name: string
     email: string
+    role?: string
   }
 }
 
@@ -41,18 +42,24 @@ function getLoginError(error: unknown): string {
       return 'Unable to connect to the MissTrace server. Please check that the backend is running.'
     }
 
+    const status = error.response.status
     const data = error.response.data as
       | { error?: string; message?: string }
       | undefined
 
-    if (data?.error) return data.error
-    if (data?.message) return data.message
-
-    if (error.response.status === 401) {
-      return 'Invalid email or password.'
+    if (status === 401) {
+      return data?.error || data?.message || 'Invalid email or password.'
     }
 
-    return 'Unable to sign in. Please try again.'
+    if (status === 400 || status === 422) {
+      return data?.error || data?.message || 'Please check your email and password.'
+    }
+
+    if (status >= 500) {
+      return 'The server encountered an error. Please try again later.'
+    }
+
+    return data?.error || data?.message || 'Unable to sign in. Please try again.'
   }
 
   return 'Something went wrong. Please try again.'
@@ -88,11 +95,11 @@ export default function Login() {
     }
 
     setErrors(newErrors)
+    setServerError('')
 
     if (Object.keys(newErrors).length > 0) return
 
     setLoading(true)
-    setServerError('')
 
     try {
       const response = await axios.post<LoginResponse>(
@@ -103,20 +110,25 @@ export default function Login() {
         },
       )
 
-      const token =
-        response.data.access_token ?? response.data.token
+      const token = response.data.access_token ?? response.data.token
 
       if (!token) {
         setServerError(
-          'Login succeeded, but the server did not return an authentication token.',
+          'The server did not return an authentication token. Please try again.',
         )
         return
       }
 
       localStorage.setItem('misstrace_token', token)
 
-      navigate(state?.from ?? '/search', {
+      const destination =
+        state?.from && state.from.startsWith('/')
+          ? state.from
+          : '/search'
+
+      navigate(destination, {
         replace: true,
+        state: null,
       })
     } catch (error: unknown) {
       setServerError(getLoginError(error))

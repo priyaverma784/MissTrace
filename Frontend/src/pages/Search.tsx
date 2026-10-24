@@ -18,6 +18,11 @@ const tips = [
   'Recent photos give the best results.',
 ]
 
+interface SearchResponse {
+  message?: string
+  matches?: unknown
+}
+
 type Raw = Record<string, unknown>
 
 function isObject(value: unknown): value is Raw {
@@ -25,9 +30,7 @@ function isObject(value: unknown): value is Raw {
 }
 
 function asText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() !== ''
-    ? value
-    : null
+  return typeof value === 'string' && value.trim() !== '' ? value : null
 }
 
 function asNumber(value: unknown): number | null {
@@ -47,40 +50,19 @@ function asNumber(value: unknown): number | null {
 }
 
 function toResults(data: unknown): SearchResult[] {
-  const list: unknown = Array.isArray(data)
-    ? data
-    : isObject(data)
-      ? data.results ?? data.matches
-      : []
+  if (!isObject(data) || !Array.isArray(data.matches)) {
+    return []
+  }
 
-  if (!Array.isArray(list)) return []
-
-  return list
+  return data.matches
     .filter(isObject)
     .map((item): SearchResult => {
-      const score =
-        asNumber(item.similarity ?? item.similarity_score ?? item.score) ?? 0
+      const rawScore = asNumber(item.similarity) ?? 0
 
       const similarity = Math.max(
         0,
-        Math.min(100, Math.round(score <= 1 ? score * 100 : score)),
+        Math.min(100, Math.round(rawScore)),
       )
-
-      const photo = asText(
-        item.photo_url ??
-          item.image_url ??
-          item.photo ??
-          item.image_path ??
-          item.photo_path,
-      )
-
-      const photoUrl = !photo
-        ? null
-        : /^(https?:|data:|blob:)/i.test(photo)
-          ? photo
-          : `http://127.0.0.1:5000/${photo
-              .replace(/\\/g, '/')
-              .replace(/^\/+/, '')}`
 
       return {
         id: asNumber(item.id) ?? 0,
@@ -94,10 +76,9 @@ function toResults(data: unknown): SearchResult[] {
           typeof item.potential_match === 'boolean'
             ? item.potential_match
             : similarity >= 50,
-        photo_url: photoUrl,
       }
     })
-    .filter((result) => result.similarity > 0)
+    .filter((result) => result.id > 0)
     .sort((a, b) => b.similarity - a.similarity)
 }
 
@@ -112,12 +93,12 @@ function getSearchError(error: unknown): string {
       error.response.data?.error ?? error.response.data?.message ?? '',
     )
 
-    if (status === 403) {
-      return 'Access denied. Only authorized administrators can search the confidential missing-person database.'
+    if (status === 401 || status === 422) {
+      return 'Your session has expired. Please sign in again.'
     }
 
-    if (status === 404 && /user not found/i.test(serverText)) {
-      return 'Your account could not be verified. Please sign in again.'
+    if (status === 403) {
+      return 'Access denied. Only authorized administrators can search the missing-person database.'
     }
 
     if (/no face|face not|0 faces/i.test(serverText)) {
@@ -125,10 +106,7 @@ function getSearchError(error: unknown): string {
     }
 
     if (status === 400 || status === 415) {
-      return (
-        serverText ||
-        'We could not read this image. Please try a different photo.'
-      )
+      return serverText || 'We could not read this image. Please try another photo.'
     }
 
     if (status >= 500) {
@@ -173,11 +151,15 @@ export default function Search() {
       const formData = new FormData()
       formData.append('photo', file)
 
-      const response = await axios.post<unknown>('/api/search', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await axios.post<SearchResponse>(
+        '/api/search',
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      })
+      )
 
       const results = toResults(response.data)
 
@@ -230,7 +212,7 @@ export default function Search() {
               >
                 <AlertTriangle
                   className="mt-0.5 h-4 w-4 shrink-0"
-                  aria-hidden
+                  aria-hidden="true"
                 />
                 {error}
               </p>
@@ -250,7 +232,7 @@ export default function Search() {
               disabled={loading}
               className="btn btn-primary btn-lg mt-5 w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Sparkles className="h-5 w-5" aria-hidden />
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
               Search with AI
             </button>
           </div>
@@ -270,7 +252,7 @@ export default function Search() {
                 >
                   <CheckCircle2
                     className="mt-0.5 h-4 w-4 shrink-0 text-blue-600"
-                    aria-hidden
+                    aria-hidden="true"
                   />
                   {tip}
                 </li>
@@ -281,7 +263,7 @@ export default function Search() {
           <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-5 text-sm text-blue-900">
             <ShieldCheck
               className="mt-0.5 h-5 w-5 shrink-0 text-blue-600"
-              aria-hidden
+              aria-hidden="true"
             />
             <p>
               Search results indicate potential matches and must be verified

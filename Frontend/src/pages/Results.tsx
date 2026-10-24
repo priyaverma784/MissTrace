@@ -1,4 +1,3 @@
-
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import axios from 'axios'
@@ -11,6 +10,7 @@ import {
   Search,
   SearchX,
   ShieldCheck,
+  UserRound,
 } from 'lucide-react'
 import SearchResultCard from '../components/SearchResultCard'
 import type { SearchResult } from '../types/search'
@@ -37,6 +37,76 @@ function isValidResult(value: unknown): value is SearchResult {
     Number.isFinite(person.similarity) &&
     person.similarity >= 0 &&
     person.similarity <= 100
+  )
+}
+
+function MatchedPersonPhoto({ personId }: { personId: number }) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    let objectUrl: string | null = null
+    const token = localStorage.getItem('misstrace_token')
+
+    if (!token) {
+      setFailed(true)
+      return
+    }
+
+    axios
+      .get(`/api/persons/${personId}/photo`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: 'blob',
+      })
+      .then((response) => {
+        if (!active) return
+
+        objectUrl = URL.createObjectURL(response.data)
+        setPhotoUrl(objectUrl)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [personId])
+
+  if (failed) {
+    return (
+      <div className="flex h-48 w-full items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+        <div className="text-center">
+          <UserRound className="mx-auto h-10 w-10" aria-hidden="true" />
+          <p className="mt-2 text-xs">Photo unavailable</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!photoUrl) {
+    return (
+      <div className="flex h-48 w-full items-center justify-center rounded-xl bg-slate-100">
+        <div
+          className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent"
+          role="status"
+          aria-label="Loading matched person's photo"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={photoUrl}
+      alt="Potentially matched missing person"
+      className="h-48 w-full rounded-xl object-cover"
+      loading="lazy"
+    />
   )
 }
 
@@ -231,10 +301,15 @@ export default function Results() {
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           {results.map((person, index) => (
-            <SearchResultCard
+            <div
               key={`${person.id}-${index}`}
-              person={person}
-            />
+              className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"
+            >
+              <MatchedPersonPhoto personId={person.id} />
+              <div className="mt-4">
+                <SearchResultCard person={person} />
+              </div>
+            </div>
           ))}
         </div>
 
