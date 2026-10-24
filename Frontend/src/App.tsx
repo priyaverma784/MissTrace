@@ -9,6 +9,8 @@ import Results from './pages/Results'
 import About from './pages/About'
 import Features from './pages/Features'
 import Help from './pages/Help'
+import AddMissingPerson from './pages/AddMissingPerson'
+import MissingPersons from './pages/MissingPersons'
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/search" element={<Search />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/add-person" element={<AddMissingPerson />} />
+          <Route path="/missing-persons" element={<MissingPersons />} />
         </Route>
 
         {/* Anything else goes back home */}

@@ -12,12 +12,15 @@ import {
 import SearchResultCard from '../components/SearchResultCard'
 import type { SearchResult } from '../types/search'
 
-export default function Results() {
-  const state = useLocation().state as {
-    results?: SearchResult[]
-  } | null
+interface ResultsLocationState {
+  results?: SearchResult[]
+}
 
-  if (!state?.results) {
+export default function Results() {
+  const location = useLocation()
+  const state = location.state as ResultsLocationState | null
+
+  if (!state || !Array.isArray(state.results)) {
     return <Navigate to="/search" replace />
   }
 
@@ -46,8 +49,7 @@ export default function Results() {
 
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
             We couldn&apos;t find a sufficiently similar face in the current
-            records. You can try another photograph with a clear, front-facing
-            view.
+            records. Try another photograph with a clear, front-facing view.
           </p>
 
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
@@ -78,7 +80,6 @@ export default function Results() {
       />
 
       <div className="page-container relative py-8 sm:py-12">
-        {/* Back navigation */}
         <Link
           to="/search"
           className="mb-7 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-cyan-700"
@@ -87,7 +88,6 @@ export default function Results() {
           Back to Search
         </Link>
 
-        {/* Page heading */}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-800">
@@ -113,7 +113,6 @@ export default function Results() {
           </Link>
         </div>
 
-        {/* Results summary */}
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.02] sm:px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
@@ -140,7 +139,6 @@ export default function Results() {
           </div>
         </div>
 
-        {/* Match cards */}
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           {results.map((person, index) => (
             <SearchResultCard
@@ -150,7 +148,6 @@ export default function Results() {
           ))}
         </div>
 
-        {/* Safety notice */}
         <div className="mt-8 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm">
@@ -172,7 +169,6 @@ export default function Results() {
           </div>
         </div>
 
-        {/* Bottom action */}
         <div className="mt-7 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-6 sm:flex-row">
           <p className="text-center text-xs text-slate-500 sm:text-left">
             MissTrace · Helping reconnect missing people with their families.

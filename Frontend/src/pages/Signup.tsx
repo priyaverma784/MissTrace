@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -15,8 +15,13 @@ import {
 } from 'lucide-react'
 
 interface SignupResponse {
-  token?: string
-  access_token?: string
+  message: string
+  user: {
+    id: number
+    name: string
+    email: string
+  }
+  error?: string
 }
 
 interface LocationState {
@@ -34,15 +39,17 @@ interface FormErrors {
 function getSignupError(error: unknown): string {
   if (axios.isAxiosError(error)) {
     if (!error.response) {
-      return 'Unable to connect to the MissTrace server.'
+      return 'Unable to connect to the MissTrace server. Please check that the backend is running.'
     }
 
-    const data = error.response.data
-    return (
-      data?.message ||
-      data?.error ||
-      'Unable to create your account. Please try again.'
-    )
+    const data = error.response.data as
+      | { error?: string; message?: string }
+      | undefined
+
+    if (data?.error) return data.error
+    if (data?.message) return data.message
+
+    return 'Unable to create your account. Please try again.'
   }
 
   return 'Something went wrong. Please try again.'
@@ -57,8 +64,10 @@ export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
   const [errors, setErrors] = useState<FormErrors>({})
   const [serverError, setServerError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -99,25 +108,23 @@ export default function Signup() {
     setServerError('')
 
     try {
-      const res = await axios.post<SignupResponse>('/api/auth/signup', {
-        name: name.trim(),
-        email: email.trim(),
-        password,
+      const response = await axios.post<SignupResponse>(
+        '/api/auth/signup',
+        {
+          name: name.trim(),
+          email: email.trim(),
+          password,
+        },
+      )
+
+      navigate('/login', {
+        replace: true,
+        state: {
+          message:
+            response.data.message ||
+            'Account created successfully. Please sign in.',
+        },
       })
-
-      const token = res.data.token ?? res.data.access_token
-
-      if (token) {
-        localStorage.setItem('misstrace_token', token)
-        navigate('/search', { replace: true })
-      } else {
-        navigate('/login', {
-          replace: true,
-          state: {
-            message: 'Account created successfully. Please sign in.',
-          },
-        })
-      }
     } catch (error: unknown) {
       setServerError(getSignupError(error))
     } finally {
@@ -126,7 +133,7 @@ export default function Signup() {
   }
 
   const handleLoginNavigation = (
-    event: React.MouseEvent<HTMLAnchorElement>,
+    event: MouseEvent<HTMLAnchorElement>,
   ) => {
     event.preventDefault()
 
@@ -138,12 +145,11 @@ export default function Signup() {
       navigate('/login', {
         state: { transition: 'slide' },
       })
-    }, 350)
+    }, 250)
   }
 
   return (
     <section className="relative isolate flex min-h-[calc(100vh-76px)] items-center justify-center overflow-hidden bg-slate-50 px-4 py-10 sm:py-14">
-      {/* Animated background decoration */}
       <div
         className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-cyan-200/40 blur-3xl"
         aria-hidden="true"
@@ -154,17 +160,15 @@ export default function Signup() {
         aria-hidden="true"
       />
 
-      {/* Signup content */}
       <div
-        className={`relative w-full max-w-md transition-all duration-300 ease-in-out ${
+        className={`relative w-full max-w-md transition-all duration-300 ${
           leavingForLogin
-            ? 'translate-x-12 scale-[0.97] opacity-0'
-            : 'translate-x-0 scale-100 animate-[authEnter_500ms_ease-out_both] opacity-100'
+            ? 'translate-x-8 opacity-0'
+            : 'translate-x-0 opacity-100'
         }`}
       >
-        {/* Brand heading */}
         <div className="mb-7 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-navy-950 text-cyan-300 shadow-lg shadow-blue-950/15 transition-transform duration-300 hover:scale-105">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-navy-950 text-cyan-300 shadow-lg shadow-blue-950/15">
             <ScanFace
               className="h-9 w-9"
               strokeWidth={1.7}
@@ -177,34 +181,38 @@ export default function Signup() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
-            Join MissTrace and help reconnect missing people with their families.
+            Join MissTrace and help reconnect missing people with their
+            families.
           </p>
         </div>
 
-        {/* Signup card */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-900/[0.06] sm:p-8">
           <div className="mb-6 flex items-center gap-3 rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
             <ShieldCheck
               className="h-5 w-5 shrink-0 text-cyan-700"
               aria-hidden="true"
             />
+
             <p className="text-xs leading-relaxed text-slate-700">
               Create a secure account to access MissTrace services.
             </p>
           </div>
 
           {state?.message && (
-            <p className="mb-5 flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+            <div
+              role="status"
+              className="mb-5 flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800"
+            >
               <Info
                 className="mt-0.5 h-4 w-4 shrink-0"
                 aria-hidden="true"
               />
               <span>{state.message}</span>
-            </p>
+            </div>
           )}
 
           {serverError && (
-            <p
+            <div
               role="alert"
               className="mb-5 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
             >
@@ -213,11 +221,10 @@ export default function Signup() {
                 aria-hidden="true"
               />
               <span>{serverError}</span>
-            </p>
+            </div>
           )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-5">
-            {/* Full name */}
             <div>
               <label
                 htmlFor="name"
@@ -234,8 +241,8 @@ export default function Signup() {
                 value={name}
                 onChange={(event) => {
                   setName(event.target.value)
-                  setErrors((prev) => ({
-                    ...prev,
+                  setErrors((previous) => ({
+                    ...previous,
                     name: undefined,
                   }))
                 }}
@@ -249,11 +256,12 @@ export default function Signup() {
               />
 
               {errors.name && (
-                <p className="mt-1.5 text-xs text-red-600">{errors.name}</p>
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.name}
+                </p>
               )}
             </div>
 
-            {/* Email */}
             <div>
               <label
                 htmlFor="email"
@@ -270,8 +278,8 @@ export default function Signup() {
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value)
-                  setErrors((prev) => ({
-                    ...prev,
+                  setErrors((previous) => ({
+                    ...previous,
                     email: undefined,
                   }))
                 }}
@@ -285,11 +293,12 @@ export default function Signup() {
               />
 
               {errors.email && (
-                <p className="mt-1.5 text-xs text-red-600">{errors.email}</p>
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.email}
+                </p>
               )}
             </div>
 
-            {/* Password */}
             <div>
               <label
                 htmlFor="password"
@@ -307,8 +316,8 @@ export default function Signup() {
                   value={password}
                   onChange={(event) => {
                     setPassword(event.target.value)
-                    setErrors((prev) => ({
-                      ...prev,
+                    setErrors((previous) => ({
+                      ...previous,
                       password: undefined,
                     }))
                   }}
@@ -325,7 +334,7 @@ export default function Signup() {
                   type="button"
                   onClick={() => setShowPassword((show) => !show)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-950"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" aria-hidden="true" />
@@ -342,7 +351,6 @@ export default function Signup() {
               )}
             </div>
 
-            {/* Confirm password */}
             <div>
               <label
                 htmlFor="confirmPassword"
@@ -360,8 +368,8 @@ export default function Signup() {
                   value={confirmPassword}
                   onChange={(event) => {
                     setConfirmPassword(event.target.value)
-                    setErrors((prev) => ({
-                      ...prev,
+                    setErrors((previous) => ({
+                      ...previous,
                       confirmPassword: undefined,
                     }))
                   }}
@@ -384,7 +392,7 @@ export default function Signup() {
                       ? 'Hide confirm password'
                       : 'Show confirm password'
                   }
-                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy-950"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-5 w-5" aria-hidden="true" />
@@ -401,15 +409,17 @@ export default function Signup() {
               )}
             </div>
 
-            {/* Create account button */}
             <button
               type="submit"
               disabled={loading || leavingForLogin}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-navy-950/15 transition duration-300 hover:-translate-y-0.5 hover:bg-navy-800 hover:shadow-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-navy-950/15 transition duration-300 hover:-translate-y-0.5 hover:bg-navy-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Loader2
+                    className="h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
                   Creating account...
                 </>
               ) : (
@@ -422,14 +432,14 @@ export default function Signup() {
             </button>
           </form>
 
-          {/* Login divider */}
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs text-slate-400">ALREADY REGISTERED?</span>
+            <span className="text-xs text-slate-400">
+              ALREADY REGISTERED?
+            </span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
 
-          {/* Login navigation */}
           <Link
             to="/login"
             onClick={handleLoginNavigation}
@@ -446,8 +456,8 @@ export default function Signup() {
         </div>
 
         <p className="mt-5 text-center text-xs leading-relaxed text-slate-500">
-          MissTrace · AI-generated matches are potential matches only and must
-          be independently verified.
+          MissTrace · AI-generated matches are potential matches only and
+          must be independently verified.
         </p>
       </div>
     </section>
