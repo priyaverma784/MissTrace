@@ -5,10 +5,10 @@ import { MapPin, Menu, X, ArrowUpRight } from 'lucide-react'
 
 const navItems = [
   { label: 'Home', to: '/', end: true },
-  { label: 'About', to: '/#about', end: false },
-  { label: 'Features', to: '/#features', end: false },
+  { label: 'About', to: '/about', end: false },
+  { label: 'Features', to: '/features', end: false },
   { label: 'Find Missing Person', to: '/search', end: false },
-  { label: 'Help', to: '/#help', end: false },
+  { label: 'Help', to: '/help', end: false },
 ]
 
 export default function Navbar() {

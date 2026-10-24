@@ -6,6 +6,9 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Search from './pages/Search'
 import Results from './pages/Results'
+import About from './pages/About'
+import Features from './pages/Features'
+import Help from './pages/Help'
 
 export default function App() {
   return (
@@ -13,6 +16,9 @@ export default function App() {
       <Route element={<UserLayout />}>
         {/* Public pages */}
         <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/help" element={<Help />} />  
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
