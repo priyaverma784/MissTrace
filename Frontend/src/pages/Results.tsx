@@ -47,6 +47,7 @@ function MatchedPersonPhoto({ personId }: { personId: number }) {
   useEffect(() => {
     let active = true
     let objectUrl: string | null = null
+
     const token = localStorage.getItem('misstrace_token')
 
     if (!token) {
@@ -73,7 +74,10 @@ function MatchedPersonPhoto({ personId }: { personId: number }) {
 
     return () => {
       active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
     }
   }, [personId])
 
@@ -119,6 +123,7 @@ export default function Results() {
 
   useEffect(() => {
     let active = true
+
     const token = localStorage.getItem('misstrace_token')
 
     if (!token) {
@@ -133,8 +138,9 @@ export default function Results() {
         },
       })
       .then((response) => {
-        if (active) {
-          setAuthorized(response.data.user.role === 'admin')
+        if (active && response.data.user) {
+          // Any authenticated user can view their own search results.
+          setAuthorized(true)
         }
       })
       .catch(() => {
@@ -144,7 +150,9 @@ export default function Results() {
         }
       })
       .finally(() => {
-        if (active) setChecking(false)
+        if (active) {
+          setChecking(false)
+        }
       })
 
     return () => {
@@ -169,13 +177,16 @@ export default function Results() {
       <Navigate
         to="/login"
         replace
-        state={{ from: '/search', message: 'Please sign in to continue.' }}
+        state={{
+          from: '/search',
+          message: 'Please sign in to continue.',
+        }}
       />
     )
   }
 
   if (!authorized) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/search" replace />
   }
 
   if (!state || !Array.isArray(state.results)) {
@@ -306,6 +317,7 @@ export default function Results() {
               className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"
             >
               <MatchedPersonPhoto personId={person.id} />
+
               <div className="mt-4">
                 <SearchResultCard person={person} />
               </div>

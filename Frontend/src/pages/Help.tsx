@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Upload,
   Wrench,
-  X,
 } from 'lucide-react'
 
 const categories = [
@@ -87,26 +86,14 @@ const faqs: {
 ]
 
 export default function Help() {
-  const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('All Questions')
-  const [openQuestion, setOpenQuestion] = useState<string | null>(faqs[0].question)
+  const [openQuestion, setOpenQuestion] = useState<string | null>(
+    faqs[0].question,
+  )
 
-  const filteredFaqs = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-
-    return faqs.filter((faq) => {
-      const matchesCategory =
-        category === 'All Questions' || faq.category === category
-
-      const matchesQuery =
-        !normalizedQuery ||
-        faq.question.toLowerCase().includes(normalizedQuery) ||
-        faq.answer.toLowerCase().includes(normalizedQuery) ||
-        faq.category.toLowerCase().includes(normalizedQuery)
-
-      return matchesCategory && matchesQuery
-    })
-  }, [query, category])
+  const filteredFaqs = faqs.filter((faq) => {
+    return category === 'All Questions' || faq.category === category
+  })
 
   function selectCategory(nextCategory: Category) {
     setCategory(nextCategory)
@@ -132,47 +119,8 @@ export default function Help() {
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:text-base">
-              Search for an answer, browse a topic, or learn how to use the
-              missing-person search workflow.
-            </p>
-
-            {/* Functional FAQ search */}
-            <form
-              className="mx-auto mt-8 flex max-w-2xl items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-900/[0.04] focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-100"
-              onSubmit={(event) => event.preventDefault()}
-              role="search"
-            >
-              <Search className="ml-3 h-5 w-5 shrink-0 text-slate-400" />
-
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value)
-                  setOpenQuestion(null)
-                }}
-                placeholder="Search questions, uploads, login..."
-                aria-label="Search help questions"
-                className="min-w-0 flex-1 border-0 bg-transparent py-3 text-sm text-navy-950 outline-none placeholder:text-slate-400 focus:ring-0"
-              />
-
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery('')
-                    setOpenQuestion(null)
-                  }}
-                  aria-label="Clear search"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </form>
-
-            <p className="mt-3 text-xs text-slate-400">
-              Search the frequently asked questions below.
+              Browse topics or learn how to use the missing-person search
+              workflow.
             </p>
           </div>
         </div>
@@ -344,13 +292,12 @@ export default function Help() {
                   </h3>
 
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Try a different keyword or choose another category.
+                    Choose another category.
                   </p>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setQuery('')
                       setCategory('All Questions')
                       setOpenQuestion(null)
                     }}
@@ -370,9 +317,7 @@ export default function Help() {
                 <Search className="h-5 w-5" />
               </div>
 
-              <h3 className="mt-5 text-lg font-bold">
-                Ready to search?
-              </h3>
+              <h3 className="mt-5 text-lg font-bold">Ready to search?</h3>
 
               <p className="mt-2 text-sm leading-7 text-slate-300">
                 Open the search tool to upload a photograph and review
@@ -392,14 +337,12 @@ export default function Help() {
               <div className="flex items-center gap-3">
                 <ShieldCheck className="h-5 w-5 text-cyan-700" />
 
-                <h3 className="font-bold text-navy-950">
-                  Safety Reminder
-                </h3>
+                <h3 className="font-bold text-navy-950">Safety Reminder</h3>
               </div>
 
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                A similarity score is not proof of identity. Potential
-                matches require independent verification.
+                A similarity score is not proof of identity. Potential matches
+                require independent verification.
               </p>
             </div>
 

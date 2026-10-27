@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from database.db import get_db_connection
 from services.face_embedding import get_face_embedding
 from services.face_matching import compare_faces
@@ -21,83 +21,116 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-# CHECK ADMIN PERMISSIONS
-def admin_required():
-    user_id = get_jwt_identity()
-    connection = get_db_connection()
-
-    try:
-        user = connection.execute(
-            "SELECT role FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        if user["role"] != "admin":
-            return jsonify({
-                "error": "Administrator access required"
-            }), 403
-
-        return None
-
-    finally:
-        connection.close()
-
-
-# SEARCH FOR MISSING PERSON
 @search_routes.route("/api/search", methods=["POST"])
 @jwt_required()
 def search_missing_person():
-    permission_error = admin_required()
-
-    if permission_error:
-        return permission_error
-
     photo = request.files.get("photo")
 
-    if not photo or not photo.filename:
+    name = request.form.get("name", "").strip()
+    age = request.form.get("age", "").strip()
+    gender = request.form.get("gender", "").strip()
+    location = request.form.get("last_seen_location", "").strip()
+    last_seen_date = request.form.get("last_seen_date", "").strip()
+
+    has_photo = bool(photo and photo.filename)
+
+    # Require at least one search criterion.
+    if not any([has_photo, name, age, gender, location, last_seen_date]):
         return jsonify({
-            "error": "Search photo is required"
+            "error": "Provide a photo or at least one search detail"
         }), 400
 
-    filename = secure_filename(photo.filename)
-    extension = os.path.splitext(filename)[1].lower()
-
-    if not filename or extension not in ALLOWED_EXTENSIONS:
-        return jsonify({
-            "error": "Upload a JPG, JPEG, PNG, or WEBP image"
-        }), 400
-
-    unique_filename = f"{uuid.uuid4().hex}{extension}"
-    photo_path = os.path.join(UPLOAD_FOLDER, unique_filename)
-
-    photo.save(photo_path)
-
-    try:
-        embedding_result = get_face_embedding(photo_path)
-
-        if not embedding_result.get("success"):
+    # Validate age when supplied.
+    if age:
+        try:
+            age_value = int(age)
+            if age_value < 0 or age_value > 130:
+                raise ValueError
+        except ValueError:
             return jsonify({
-                "error": embedding_result.get(
-                    "message",
-                    "Could not process the uploaded face",
-                )
+                "error": "Age must be a number between 0 and 130"
             }), 400
 
-        search_embedding = embedding_result["embedding"]
+    # Validate the uploaded photo when supplied.
+    photo_path = None
+    search_embedding = None
+
+    if has_photo:
+        filename = secure_filename(photo.filename)
+        extension = os.path.splitext(filename)[1].lower()
+
+        if not filename or extension not in ALLOWED_EXTENSIONS:
+            return jsonify({
+                "error": "Upload a JPG, JPEG, PNG, or WEBP image"
+            }), 400
+
+        unique_filename = f"{uuid.uuid4().hex}{extension}"
+        photo_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+
+    try:
+        # Generate a face embedding only when a photo is supplied.
+        if has_photo:
+            photo.save(photo_path)
+
+            embedding_result = get_face_embedding(photo_path)
+
+            if not embedding_result.get("success"):
+                return jsonify({
+                    "error": embedding_result.get(
+                        "message",
+                        "Could not process the uploaded face",
+                    )
+                }), 400
+
+            search_embedding = embedding_result["embedding"]
+
+        # Build the database query using the supplied details.
+        conditions = []
+        parameters = []
+
+        if name:
+            conditions.append("LOWER(name) LIKE LOWER(?)")
+            parameters.append(f"%{name}%")
+
+        if age:
+            conditions.append("age = ?")
+            parameters.append(int(age))
+
+        if gender:
+            conditions.append("LOWER(gender) = LOWER(?)")
+            parameters.append(gender)
+
+        if location:
+            conditions.append(
+                "LOWER(last_seen_location) LIKE LOWER(?)"
+            )
+            parameters.append(f"%{location}%")
+
+        if last_seen_date:
+            conditions.append("last_seen_date = ?")
+            parameters.append(last_seen_date)
+
+        query = """
+            SELECT
+                id,
+                name,
+                age,
+                gender,
+                last_seen_location,
+                last_seen_date,
+                face_embedding
+            FROM missing_persons
+        """
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
 
         connection = get_db_connection()
 
         try:
             persons = connection.execute(
-                """
-                SELECT id, name, age, gender, last_seen_location,
-                       last_seen_date, face_embedding
-                FROM missing_persons
-                WHERE face_embedding IS NOT NULL
-                """
+                query,
+                parameters,
             ).fetchall()
         finally:
             connection.close()
@@ -105,50 +138,78 @@ def search_missing_person():
         matches = []
 
         for person in persons:
-            try:
-                stored_embedding = json.loads(
-                    person["face_embedding"]
-                )
+            similarity = None
+            potential_match = None
 
-                comparison = compare_faces(
-                    search_embedding,
-                    stored_embedding,
-                )
-
-                if not comparison.get("success"):
+            # If a photo was supplied, require a successful face
+            # comparison for the person to appear in the results.
+            if has_photo:
+                if not person["face_embedding"]:
                     continue
 
-                matches.append({
-                    "id": person["id"],
-                    "name": person["name"],
-                    "age": person["age"],
-                    "gender": person["gender"],
-                    "last_seen_location": person["last_seen_location"],
-                    "last_seen_date": person["last_seen_date"],
-                    "similarity": comparison["similarity"],
-                    "potential_match": comparison["potential_match"],
-                })
+                try:
+                    stored_embedding = json.loads(
+                        person["face_embedding"]
+                    )
 
-            except (ValueError, TypeError, KeyError):
-                continue
+                    comparison = compare_faces(
+                        search_embedding,
+                        stored_embedding,
+                    )
 
-        matches.sort(
-            key=lambda match: match["similarity"],
-            reverse=True,
-        )
+                    if not comparison.get("success"):
+                        continue
+
+                    similarity = comparison["similarity"]
+                    potential_match = comparison["potential_match"]
+
+                except (ValueError, TypeError, KeyError):
+                    continue
+
+            matches.append({
+                "id": person["id"],
+                "name": person["name"],
+                "age": person["age"],
+                "gender": person["gender"],
+                "last_seen_location": person["last_seen_location"],
+                "last_seen_date": person["last_seen_date"],
+                "similarity": similarity,
+                "potential_match": potential_match,
+            })
+
+        # Rank results by face similarity when a photo was supplied.
+        if has_photo:
+            matches.sort(
+                key=lambda match: (
+                    match["similarity"]
+                    if match["similarity"] is not None
+                    else -1
+                ),
+                reverse=True,
+            )
 
         return jsonify({
             "message": "Search completed successfully",
             "matches": matches,
+            "total_matches": len(matches),
+            "search_type": (
+                "photo_and_details"
+                if has_photo and any([
+                    name, age, gender, location, last_seen_date
+                ])
+                else "photo"
+                if has_photo
+                else "details"
+            ),
         }), 200
 
     except Exception:
         return jsonify({
-            "error": "An unexpected error occurred during face search"
+            "error": "An unexpected error occurred during search"
         }), 500
 
     finally:
-        if os.path.isfile(photo_path):
+        if photo_path and os.path.isfile(photo_path):
             try:
                 os.remove(photo_path)
             except OSError:
