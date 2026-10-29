@@ -32,6 +32,16 @@ export default function Navbar() {
 
   const closeMenu = () => setMenuOpen(false)
 
+  // Admin-only link: shown only when the logged-in user is an admin.
+  const visibleNavItems =
+    user?.role === 'admin'
+      ? [
+          ...navItems.slice(0, -1),
+          { label: 'Missing Persons', to: '/missing-persons', end: false },
+          navItems[navItems.length - 1],
+        ]
+      : navItems
+
   useEffect(() => {
     let cancelled = false
     const token = localStorage.getItem('misstrace_token')
@@ -160,7 +170,7 @@ export default function Navbar() {
           aria-label="Main navigation"
           className="ml-[-28px] hidden items-center justify-center gap-5 lg:flex xl:gap-7"
         >
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.label}
               to={item.to}
@@ -216,7 +226,7 @@ export default function Navbar() {
             aria-label="Mobile navigation"
             className="mx-auto flex max-w-xl flex-col gap-1"
           >
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <NavLink
                 key={item.label}
                 to={item.to}
