@@ -6,24 +6,27 @@ venv/
 __pycache__/
 *.py[cod]
 
-
+# Environment variables and secrets
 .env
 .env.*
 !.env.example
 
+# Backend database and private uploads
 Backend/instance/
 Backend/uploads/
 *.db
- 
-#admin
+*.sqlite
+*.sqlite3
+
+# Admin and database utility scripts
 Backend/make_admin.py
 Backend/check_db.py
 
-# Frontend
+# Frontend dependencies and build output
 node_modules/
 dist/
 
-# Editor / OS files
+# Editor and operating system files
 .vscode/
 .DS_Store
 Thumbs.db
