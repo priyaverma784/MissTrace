@@ -1,12 +1,30 @@
+# Python virtual environments
 .venv/
 venv/
+
+# Python cache
 __pycache__/
 *.py[cod]
+
+# Secrets (JWT key and other settings)
 .env
 .env.*
+!.env.example
+
+# Database and uploaded photos of real people
 Backend/instance/
 Backend/uploads/
+*.db
+
+# One-off admin helper scripts
+Backend/make_admin.py
+Backend/check_db.py
+
+# Frontend
 node_modules/
 dist/
+
+# Editor / OS files
+.vscode/
 .DS_Store
 Thumbs.db
