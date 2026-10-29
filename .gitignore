@@ -6,12 +6,11 @@ venv/
 __pycache__/
 *.py[cod]
 
-# Secrets (JWT key and other settings)
+
 .env
 .env.*
 !.env.example
 
-# Database and uploaded photos of real people
 Backend/instance/
 Backend/uploads/
 *.db
