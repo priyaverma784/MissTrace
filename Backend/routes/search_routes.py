@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 import os
 import json
 import uuid
+import traceback
 
 search_routes = Blueprint("search_routes", __name__)
 
@@ -19,6 +20,53 @@ UPLOAD_FOLDER = os.path.join(
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Minimum similarity (in percent) for a record to be shown.
+MIN_SIMILARITY = 50
+
+
+def build_query(table, location_col, date_col, time_col, filters):
+    """Build the SELECT for either missing_persons or found_person_reports."""
+    conditions = ["status IN ('approved', 'pending')"]
+    parameters = []
+
+    if filters["name"]:
+        conditions.append("LOWER(name) LIKE LOWER(?)")
+        parameters.append(f"%{filters['name']}%")
+
+    if filters["age"]:
+        conditions.append("age = ?")
+        parameters.append(int(filters["age"]))
+
+    if filters["gender"]:
+        conditions.append("LOWER(gender) = LOWER(?)")
+        parameters.append(filters["gender"])
+
+    if filters["location"]:
+        conditions.append(f"LOWER({location_col}) LIKE LOWER(?)")
+        parameters.append(f"%{filters['location']}%")
+
+    if filters["last_seen_date"]:
+        conditions.append(f"{date_col} = ?")
+        parameters.append(filters["last_seen_date"])
+
+    query = f"""
+        SELECT
+            id,
+            name,
+            age,
+            gender,
+            {location_col} AS location,
+            {date_col} AS seen_date,
+            {time_col} AS seen_time,
+            clothing_description,
+            identifying_marks,
+            face_embedding
+        FROM {table}
+        WHERE {" AND ".join(conditions)}
+    """
+
+    return query, parameters
 
 
 @search_routes.route("/api/search", methods=["POST"])
@@ -34,13 +82,11 @@ def search_missing_person():
 
     has_photo = bool(photo and photo.filename)
 
-    # Require at least one search criterion.
     if not any([has_photo, name, age, gender, location, last_seen_date]):
         return jsonify({
             "error": "Provide a photo or at least one search detail"
         }), 400
 
-    # Validate age when supplied.
     if age:
         try:
             age_value = int(age)
@@ -51,7 +97,6 @@ def search_missing_person():
                 "error": "Age must be a number between 0 and 130"
             }), 400
 
-    # Validate the uploaded photo when supplied.
     photo_path = None
     search_embedding = None
 
@@ -68,7 +113,6 @@ def search_missing_person():
         photo_path = os.path.join(UPLOAD_FOLDER, unique_filename)
 
     try:
-        # Generate a face embedding only when a photo is supplied.
         if has_photo:
             photo.save(photo_path)
 
@@ -84,56 +128,42 @@ def search_missing_person():
 
             search_embedding = embedding_result["embedding"]
 
-        # Build the database query using the supplied details.
-        conditions = []
-        parameters = []
+        filters = {
+            "name": name,
+            "age": age,
+            "gender": gender,
+            "location": location,
+            "last_seen_date": last_seen_date,
+        }
 
-        if name:
-            conditions.append("LOWER(name) LIKE LOWER(?)")
-            parameters.append(f"%{name}%")
-
-        if age:
-            conditions.append("age = ?")
-            parameters.append(int(age))
-
-        if gender:
-            conditions.append("LOWER(gender) = LOWER(?)")
-            parameters.append(gender)
-
-        if location:
-            conditions.append(
-                "LOWER(last_seen_location) LIKE LOWER(?)"
-            )
-            parameters.append(f"%{location}%")
-
-        if last_seen_date:
-            conditions.append("last_seen_date = ?")
-            parameters.append(last_seen_date)
-
-        query = """
-            SELECT
-                id,
-                name,
-                age,
-                gender,
-                last_seen_location,
-                last_seen_date,
-                face_embedding
-            FROM missing_persons
-        """
-
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-
+        persons = []
         connection = get_db_connection()
 
         try:
-            persons = connection.execute(
-                query,
-                parameters,
-            ).fetchall()
+            # Missing-person reports
+            query, params = build_query(
+                "missing_persons",
+                "last_seen_location",
+                "last_seen_date",
+                "last_seen_time",
+                filters,
+            )
+            persons.extend(connection.execute(query, params).fetchall())
+
+            # Found-person reports
+            query, params = build_query(
+                "found_person_reports",
+                "found_location",
+                "found_date",
+                "found_time",
+                filters,
+            )
+            persons.extend(connection.execute(query, params).fetchall())
+
         finally:
             connection.close()
+
+        print(f"[search] rows found in database: {len(persons)}")
 
         matches = []
 
@@ -141,8 +171,6 @@ def search_missing_person():
             similarity = None
             potential_match = None
 
-            # If a photo was supplied, require a successful face
-            # comparison for the person to appear in the results.
             if has_photo:
                 if not person["face_embedding"]:
                     continue
@@ -160,8 +188,14 @@ def search_missing_person():
                     if not comparison.get("success"):
                         continue
 
-                    similarity = comparison["similarity"]
+                    similarity = round(
+                        max(0.0, comparison["similarity"]) * 100, 1
+                    )
                     potential_match = comparison["potential_match"]
+
+                    # Show only results with 50% similarity or higher.
+                    if similarity < MIN_SIMILARITY:
+                        continue
 
                 except (ValueError, TypeError, KeyError):
                     continue
@@ -171,13 +205,17 @@ def search_missing_person():
                 "name": person["name"],
                 "age": person["age"],
                 "gender": person["gender"],
-                "last_seen_location": person["last_seen_location"],
-                "last_seen_date": person["last_seen_date"],
+                "last_seen_location": person["location"],
+                "last_seen_date": person["seen_date"],
+                "last_seen_time": person["seen_time"],
+                "clothing_description": person["clothing_description"],
+                "identifying_marks": person["identifying_marks"],
                 "similarity": similarity,
                 "potential_match": potential_match,
             })
 
-        # Rank results by face similarity when a photo was supplied.
+        print(f"[search] matches returned: {len(matches)}")
+
         if has_photo:
             matches.sort(
                 key=lambda match: (
@@ -188,22 +226,25 @@ def search_missing_person():
                 reverse=True,
             )
 
+        search_type = (
+            "photo_and_details"
+            if has_photo and any([
+                name, age, gender, location, last_seen_date
+            ])
+            else "photo"
+            if has_photo
+            else "details"
+        )
+
         return jsonify({
             "message": "Search completed successfully",
             "matches": matches,
             "total_matches": len(matches),
-            "search_type": (
-                "photo_and_details"
-                if has_photo and any([
-                    name, age, gender, location, last_seen_date
-                ])
-                else "photo"
-                if has_photo
-                else "details"
-            ),
+            "search_type": search_type,
         }), 200
 
     except Exception:
+        traceback.print_exc()
         return jsonify({
             "error": "An unexpected error occurred during search"
         }), 500

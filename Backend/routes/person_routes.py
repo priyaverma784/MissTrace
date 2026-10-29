@@ -20,7 +20,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-# ADMIN AUTHORIZATION
 def admin_required():
     user_id = get_jwt_identity()
     connection = get_db_connection()
@@ -40,7 +39,6 @@ def admin_required():
             }), 403
 
         return None
-
     finally:
         connection.close()
 
@@ -68,34 +66,43 @@ def is_safe_photo_path(photo_path):
         return False
 
 
-# ADD MISSING PERSON
+# SUBMIT A MISSING-PERSON REPORT
+# Any authenticated user can submit a report.
 @person_routes.route("/api/persons", methods=["POST"])
 @jwt_required()
 def add_missing_person():
-    permission_error = admin_required()
-    if permission_error:
-        return permission_error
-
     name = request.form.get("name", "").strip()
     age = request.form.get("age") or None
     gender = request.form.get("gender") or None
-    location = request.form.get("last_seen_location") or None
+    location = request.form.get("last_seen_location", "").strip() or None
     last_seen_date = request.form.get("last_seen_date") or None
+    last_seen_time = request.form.get("last_seen_time") or None
+    clothing_description = (
+        request.form.get("clothing_description", "").strip() or None
+    )
+    identifying_marks = (
+        request.form.get("identifying_marks", "").strip() or None
+    )
+
+    # Private reporter information
+    reporter_name = request.form.get("reporter_name", "").strip() or None
+    reporter_relationship = (
+        request.form.get("reporter_relationship", "").strip() or None
+    )
+    reporter_contact = (
+        request.form.get("reporter_contact", "").strip() or None
+    )
+
     photo = request.files.get("photo")
 
     if not name:
-        return jsonify({"error": "Name is required"}), 400
+        return jsonify({"error": "Missing person's name is required"}), 400
 
     if not photo or not photo.filename:
-        return jsonify({"error": "Photo is required"}), 400
+        return jsonify({"error": "A photograph is required"}), 400
 
-    original_name = secure_filename(photo.filename)
-    extension = os.path.splitext(original_name)[1].lower()
-
-    if not original_name or extension not in ALLOWED_EXTENSIONS:
-        return jsonify({
-            "error": "Upload a JPG, JPEG, PNG, or WEBP image"
-        }), 400
+    if not location:
+        return jsonify({"error": "Last-seen location is required"}), 400
 
     if age is not None:
         try:
@@ -107,17 +114,27 @@ def add_missing_person():
                 "error": "Age must be between 0 and 150"
             }), 400
 
+    original_name = secure_filename(photo.filename)
+    extension = os.path.splitext(original_name)[1].lower()
+
+    if not original_name or extension not in ALLOWED_EXTENSIONS:
+        return jsonify({
+            "error": "Upload a JPG, JPEG, PNG, or WEBP image"
+        }), 400
+
     filename = f"{uuid.uuid4().hex}{extension}"
     photo_path = os.path.join(UPLOAD_FOLDER, filename)
-    photo.save(photo_path)
 
     try:
+        photo.save(photo_path)
+
         face_result = process_face(photo_path)
 
         if not face_result.get("success"):
             return jsonify({
                 "error": face_result.get(
-                    "message", "Face processing failed"
+                    "message",
+                    "Face processing failed",
                 )
             }), 400
 
@@ -126,12 +143,23 @@ def add_missing_person():
         try:
             cursor = connection.execute(
                 """
-                INSERT INTO missing_persons
-                (
-                    name, age, gender, photo_path,
-                    last_seen_location, last_seen_date, face_embedding
+                INSERT INTO missing_persons (
+                    name,
+                    age,
+                    gender,
+                    photo_path,
+                    last_seen_location,
+                    last_seen_date,
+                    face_embedding,
+                    last_seen_time,
+                    clothing_description,
+                    identifying_marks,
+                    reporter_name,
+                    reporter_relationship,
+                    reporter_contact,
+                    status
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     name,
@@ -141,6 +169,13 @@ def add_missing_person():
                     location,
                     last_seen_date,
                     json.dumps(face_result["embedding"]),
+                    last_seen_time,
+                    clothing_description,
+                    identifying_marks,
+                    reporter_name,
+                    reporter_relationship,
+                    reporter_contact,
+                    "pending",
                 ),
             )
 
@@ -151,19 +186,20 @@ def add_missing_person():
             connection.close()
 
         return jsonify({
-            "message": "Missing person added successfully",
+            "message": "Report submitted successfully and is awaiting review",
             "person_id": person_id,
+            "status": "pending",
             "face_detected": True,
             "face_count": face_result.get("face_count", 1),
         }), 201
 
     except Exception:
         return jsonify({
-            "error": "Unable to save the missing-person record"
+            "error": "Unable to save the missing-person report"
         }), 500
 
     finally:
-        # Remove the upload if it was not saved successfully.
+        # Remove the uploaded photo if the record was not saved.
         if os.path.isfile(photo_path):
             connection = get_db_connection()
             try:
@@ -181,7 +217,7 @@ def add_missing_person():
                     pass
 
 
-# VIEW ALL MISSING PERSONS
+# VIEW ALL RECORDS - ADMIN ONLY
 @person_routes.route("/api/persons", methods=["GET"])
 @jwt_required()
 def get_missing_persons():
@@ -194,49 +230,43 @@ def get_missing_persons():
     try:
         persons = connection.execute(
             """
-            SELECT id, name, age, gender, last_seen_location,
-                   last_seen_date
+            SELECT
+                id,
+                name,
+                age,
+                gender,
+                last_seen_location,
+                last_seen_date,
+                last_seen_time,
+                clothing_description,
+                identifying_marks,
+                status
             FROM missing_persons
             ORDER BY id DESC
             """
         ).fetchall()
 
-        return jsonify([
-            {
-                "id": person["id"],
-                "name": person["name"],
-                "age": person["age"],
-                "gender": person["gender"],
-                "last_seen_location": person["last_seen_location"],
-                "last_seen_date": person["last_seen_date"],
-            }
-            for person in persons
-        ]), 200
+        return jsonify([dict(person) for person in persons]), 200
 
     finally:
         connection.close()
 
 
-# SECURE PHOTO ACCESS
+# PHOTO ACCESS - ANY LOGGED-IN USER (rejected reports are hidden)
+# CHANGED: the admin check was removed so search results can show photos.
 @person_routes.route(
     "/api/persons/<int:person_id>/photo",
     methods=["GET"],
 )
 @jwt_required()
 def get_person_photo(person_id):
-    permission_error = admin_required()
-    if permission_error:
-        return permission_error
-
     connection = get_db_connection()
 
     try:
         person = get_person_by_id(connection, person_id)
 
-        if person is None:
-            return jsonify({
-                "error": "Missing person not found"
-            }), 404
+        if person is None or person["status"] == "rejected":
+            return jsonify({"error": "Missing person not found"}), 404
 
         photo_path = person["photo_path"]
 
@@ -249,7 +279,50 @@ def get_person_photo(person_id):
     return send_file(photo_path, conditional=True)
 
 
-# UPDATE MISSING PERSON
+# REVIEW REPORT - ADMIN ONLY
+@person_routes.route(
+    "/api/persons/<int:person_id>/review",
+    methods=["PATCH"],
+)
+@jwt_required()
+def review_missing_person(person_id):
+    permission_error = admin_required()
+    if permission_error:
+        return permission_error
+
+    data = request.get_json(silent=True) or {}
+    status = data.get("status")
+
+    if status not in ("approved", "rejected"):
+        return jsonify({
+            "error": "Status must be approved or rejected"
+        }), 400
+
+    connection = get_db_connection()
+
+    try:
+        person = get_person_by_id(connection, person_id)
+
+        if person is None:
+            return jsonify({"error": "Missing person not found"}), 404
+
+        connection.execute(
+            "UPDATE missing_persons SET status = ? WHERE id = ?",
+            (status, person_id),
+        )
+        connection.commit()
+
+        return jsonify({
+            "message": f"Report {status} successfully",
+            "person_id": person_id,
+            "status": status,
+        }), 200
+
+    finally:
+        connection.close()
+
+
+# UPDATE RECORD - ADMIN ONLY
 @person_routes.route(
     "/api/persons/<int:person_id>",
     methods=["PUT"],
@@ -267,66 +340,71 @@ def update_missing_person(person_id):
             "error": "A JSON request body is required"
         }), 400
 
+    allowed_fields = {
+        "name",
+        "age",
+        "gender",
+        "last_seen_location",
+        "last_seen_date",
+        "last_seen_time",
+        "clothing_description",
+        "identifying_marks",
+    }
+
+    updates = {
+        key: value
+        for key, value in data.items()
+        if key in allowed_fields
+    }
+
+    if not updates:
+        return jsonify({"error": "No valid fields provided"}), 400
+
+    if "name" in updates and (
+        not isinstance(updates["name"], str)
+        or not updates["name"].strip()
+    ):
+        return jsonify({"error": "A valid name is required"}), 400
+
+    if "age" in updates:
+        age = updates["age"]
+        if age not in (None, ""):
+            try:
+                age = int(age)
+                if not 0 <= age <= 150:
+                    raise ValueError
+                updates["age"] = age
+            except (TypeError, ValueError):
+                return jsonify({
+                    "error": "Age must be between 0 and 150"
+                }), 400
+        else:
+            updates["age"] = None
+
+    if "name" in updates:
+        updates["name"] = updates["name"].strip()
+
     connection = get_db_connection()
 
     try:
         person = get_person_by_id(connection, person_id)
 
         if person is None:
-            return jsonify({
-                "error": "Missing person not found"
-            }), 404
+            return jsonify({"error": "Missing person not found"}), 404
 
-        name = data.get("name", person["name"])
-
-        if not isinstance(name, str) or not name.strip():
-            return jsonify({"error": "A valid name is required"}), 400
-
-        age = data.get("age", person["age"])
-
-        if age not in (None, ""):
-            try:
-                age = int(age)
-                if not 0 <= age <= 150:
-                    raise ValueError
-            except (TypeError, ValueError):
-                return jsonify({
-                    "error": "Age must be between 0 and 150"
-                }), 400
-        else:
-            age = None
-
-        gender = data.get("gender", person["gender"])
-        location = data.get(
-            "last_seen_location",
-            person["last_seen_location"],
+        set_clause = ", ".join(
+            f"{field} = ?" for field in updates
         )
-        last_seen_date = data.get(
-            "last_seen_date",
-            person["last_seen_date"],
-        )
+        values = list(updates.values()) + [person_id]
 
         connection.execute(
-            """
-            UPDATE missing_persons
-            SET name = ?, age = ?, gender = ?,
-                last_seen_location = ?, last_seen_date = ?
-            WHERE id = ?
-            """,
-            (
-                name.strip(),
-                age,
-                gender,
-                location,
-                last_seen_date,
-                person_id,
-            ),
+            f"UPDATE missing_persons SET {set_clause} WHERE id = ?",
+            values,
         )
-
         connection.commit()
 
         return jsonify({
-            "message": "Missing person updated successfully",
+            "message": "Missing-person record updated successfully",
             "person_id": person_id,
         }), 200
 
@@ -334,7 +412,7 @@ def update_missing_person(person_id):
         connection.close()
 
 
-# DELETE MISSING PERSON
+# DELETE RECORD - ADMIN ONLY
 @person_routes.route(
     "/api/persons/<int:person_id>",
     methods=["DELETE"],
@@ -351,9 +429,7 @@ def delete_missing_person(person_id):
         person = get_person_by_id(connection, person_id)
 
         if person is None:
-            return jsonify({
-                "error": "Missing person not found"
-            }), 404
+            return jsonify({"error": "Missing person not found"}), 404
 
         photo_path = person["photo_path"]
 
@@ -373,6 +449,6 @@ def delete_missing_person(person_id):
             pass
 
     return jsonify({
-        "message": "Missing person deleted successfully",
+        "message": "Missing-person record deleted successfully",
         "person_id": person_id,
     }), 200

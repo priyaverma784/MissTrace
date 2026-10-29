@@ -10,10 +10,14 @@ import {
   Search,
   SearchX,
   ShieldCheck,
+  UserPlus,
   UserRound,
 } from 'lucide-react'
 import SearchResultCard from '../components/SearchResultCard'
 import type { SearchResult } from '../types/search'
+
+// Only matches at or above this similarity (%) are shown.
+const MIN_SIMILARITY = 20
 
 interface ResultsLocationState {
   results?: SearchResult[]
@@ -83,7 +87,7 @@ function MatchedPersonPhoto({ personId }: { personId: number }) {
 
   if (failed) {
     return (
-      <div className="flex h-48 w-full items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+      <div className="flex h-72 w-full items-center justify-center rounded-xl bg-slate-100 text-slate-400">
         <div className="text-center">
           <UserRound className="mx-auto h-10 w-10" aria-hidden="true" />
           <p className="mt-2 text-xs">Photo unavailable</p>
@@ -94,7 +98,7 @@ function MatchedPersonPhoto({ personId }: { personId: number }) {
 
   if (!photoUrl) {
     return (
-      <div className="flex h-48 w-full items-center justify-center rounded-xl bg-slate-100">
+      <div className="flex h-72 w-full items-center justify-center rounded-xl bg-slate-100">
         <div
           className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent"
           role="status"
@@ -108,7 +112,7 @@ function MatchedPersonPhoto({ personId }: { personId: number }) {
     <img
       src={photoUrl}
       alt="Potentially matched missing person"
-      className="h-48 w-full rounded-xl object-cover"
+      className="h-72 w-full rounded-xl bg-slate-100 object-cover object-top"
       loading="lazy"
     />
   )
@@ -195,6 +199,7 @@ export default function Results() {
 
   const results = state.results
     .filter(isValidResult)
+    .filter((person) => person.similarity >= MIN_SIMILARITY)
     .sort((a, b) => b.similarity - a.similarity)
 
   if (results.length === 0) {
@@ -220,10 +225,11 @@ export default function Results() {
 
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
             We couldn't find a sufficiently similar face in the current
-            records. Try another photograph with a clear, front-facing view.
+            records. Try another photograph with a clear, front-facing view,
+            or report this person so others can help find them.
           </p>
 
-          <div className="mt-7 flex justify-center">
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               to="/search"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-navy-800"
@@ -231,6 +237,14 @@ export default function Results() {
               <Search className="h-4 w-4" aria-hidden="true" />
               Try Another Search
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+
+            <Link
+              to="/add-person"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-600 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-800 transition hover:-translate-y-0.5 hover:bg-cyan-100"
+            >
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              Report a Missing Person
             </Link>
           </div>
 
@@ -275,13 +289,23 @@ export default function Results() {
             </p>
           </div>
 
-          <Link
-            to="/search"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-navy-950/10 transition hover:-translate-y-0.5 hover:bg-navy-800 sm:w-auto"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            New Search
-          </Link>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <Link
+              to="/search"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-navy-950/10 transition hover:-translate-y-0.5 hover:bg-navy-800 sm:w-auto"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              New Search
+            </Link>
+
+            <Link
+              to="/add-person"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-600 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-800 transition hover:-translate-y-0.5 hover:bg-cyan-100 sm:w-auto"
+            >
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              Report a Missing Person
+            </Link>
+          </div>
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/[0.02] sm:px-5">
@@ -323,6 +347,25 @@ export default function Results() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-8 flex flex-col items-start justify-between gap-4 rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
+          <div>
+            <h2 className="text-sm font-bold text-navy-950">
+              Not the person you are looking for?
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Report them as missing so others can help find them.
+            </p>
+          </div>
+
+          <Link
+            to="/add-person"
+            className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-cyan-800 sm:w-auto"
+          >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            Report a Missing Person
+          </Link>
         </div>
 
         <div className="mt-8 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5">

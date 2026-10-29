@@ -1,4 +1,4 @@
-import { Calendar, MapPin } from 'lucide-react'
+import { Calendar, MapPin, Navigation } from 'lucide-react'
 import type { SearchResult } from '../types/search'
 
 function formatDate(value: string | null): string {
@@ -20,17 +20,26 @@ export default function SearchResultCard({
 }: {
   person: SearchResult
 }) {
-  const similarity = Math.max(
-    0,
-    Math.min(100, Math.round(person.similarity)),
-  )
+  const similarity =
+    typeof person.similarity === 'number' &&
+    Number.isFinite(person.similarity)
+      ? Math.max(0, Math.min(100, Math.round(person.similarity)))
+      : null
 
   const barColor =
-    similarity >= 85
-      ? 'bg-emerald-500'
-      : similarity >= 70
-        ? 'bg-blue-500'
-        : 'bg-amber-500'
+    similarity === null
+      ? 'bg-slate-300'
+      : similarity >= 85
+        ? 'bg-emerald-500'
+        : similarity >= 70
+          ? 'bg-blue-500'
+          : 'bg-amber-500'
+
+  const location = person.last_seen_location?.trim()
+
+  const mapUrl = location
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location)}`
+    : null
 
   return (
     <article className="min-w-0 animate-fade-up">
@@ -76,13 +85,28 @@ export default function SearchResultCard({
             aria-hidden="true"
           />
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <dt className="text-xs font-medium text-slate-500">
               Last known location
             </dt>
+
             <dd className="mt-0.5 break-words font-medium text-slate-800">
-              {person.last_seen_location || 'Not available'}
+              {location || 'Not available'}
             </dd>
+
+            {mapUrl && (
+              <a
+                href={mapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2"
+                aria-label={`View directions to the last known location for ${person.name || 'this person'}`}
+              >
+                <Navigation className="h-4 w-4" aria-hidden="true" />
+                View on Map
+                <span aria-hidden="true">↗</span>
+              </a>
+            )}
           </div>
         </div>
 
@@ -96,6 +120,7 @@ export default function SearchResultCard({
             <dt className="text-xs font-medium text-slate-500">
               Last seen date
             </dt>
+
             <dd className="mt-0.5 font-medium text-slate-800">
               {formatDate(person.last_seen_date)}
             </dd>
@@ -110,27 +135,37 @@ export default function SearchResultCard({
           </span>
 
           <span className="text-lg font-bold text-navy-950">
-            {similarity}%
+            {similarity === null ? 'N/A' : `${similarity}%`}
           </span>
         </div>
 
         <div
           className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"
           role="progressbar"
-          aria-valuenow={similarity}
+          aria-valuenow={similarity ?? 0}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`Facial similarity: ${similarity}%`}
+          aria-label={
+            similarity === null
+              ? 'Facial similarity not available'
+              : `Facial similarity: ${similarity}%`
+          }
         >
           <div
             className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-            style={{ width: `${similarity}%` }}
+            style={{ width: `${similarity ?? 0}%` }}
           />
         </div>
 
         <p className="mt-2 text-xs leading-5 text-slate-500">
           Similarity indicates facial resemblance, not confirmed identity.
           Verify every potential match independently.
+        </p>
+
+        <p className="mt-2 text-xs leading-5 text-amber-700">
+          Map directions lead to the recorded last-known location, not a
+          confirmed current location. Verify the information with the
+          appropriate authorities before travelling.
         </p>
       </div>
     </article>

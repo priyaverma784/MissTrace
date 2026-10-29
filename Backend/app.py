@@ -8,6 +8,7 @@ import os
 from routes.person_routes import person_routes
 from routes.search_routes import search_routes
 from routes.auth_routes import auth_routes
+from routes.found_person_routes import found_person_routes
 
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -25,6 +26,7 @@ jwt = JWTManager(app)
 app.register_blueprint(person_routes)
 app.register_blueprint(search_routes)
 app.register_blueprint(auth_routes)
+app.register_blueprint(found_person_routes)
 
 
 @app.route("/")

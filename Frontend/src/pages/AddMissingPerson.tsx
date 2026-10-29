@@ -1,153 +1,327 @@
-
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
+  AlertCircle,
   ArrowLeft,
-  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
   CheckCircle2,
-  FileImage,
-  LoaderCircle,
+  Clock,
+  FileText,
+  MapPin,
   ShieldCheck,
-  UserPlus,
+  Upload,
+  UserRound,
+  Users,
 } from 'lucide-react'
+
+type ReportType = 'missing' | 'found'
+
+interface ReportForm {
+  name: string
+  age: string
+  gender: string
+  location: string
+  date: string
+  time: string
+  clothing_description: string
+  identifying_marks: string
+  reporter_name: string
+  reporter_relationship: string
+  reporter_contact: string
+  authority_name: string
+  case_reference: string
+  additional_notes: string
+}
+
+const initialForm: ReportForm = {
+  name: '',
+  age: '',
+  gender: '',
+  location: '',
+  date: '',
+  time: '',
+  clothing_description: '',
+  identifying_marks: '',
+  reporter_name: '',
+  reporter_relationship: '',
+  reporter_contact: '',
+  authority_name: '',
+  case_reference: '',
+  additional_notes: '',
+}
+
+const inputClass =
+  'mt-2 w-full rounded-xl border border-white/10 bg-[#0a1b33] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400'
+
+const labelClass = 'text-sm font-medium text-slate-300'
 
 export default function AddMissingPerson() {
   const navigate = useNavigate()
 
-  const [name, setName] = useState('')
-  const [age, setAge] = useState('')
-  const [gender, setGender] = useState('')
-  const [location, setLocation] = useState('')
-  const [date, setDate] = useState('')
+  const [reportType, setReportType] = useState<ReportType | null>(null)
+  const [form, setForm] = useState<ReportForm>(initialForm)
   const [photo, setPhoto] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState('')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  function updateField(
+    event: ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) {
+    const { name, value } = event.target
 
-    if (loading) return
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }))
+  }
 
-    const token = localStorage.getItem('misstrace_token')
+  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
 
-    if (!token) {
-      navigate('/login', {
-        replace: true,
-        state: {
-          from: '/add-person',
-          message: 'Please log in with an administrator account.',
-        },
-      })
-      return
+    setError('')
+
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview)
     }
 
-    if (!name.trim()) {
-      setError('Please enter the missing person’s name.')
-      return
-    }
+    setPhotoPreview('')
 
-    if (!photo) {
-      setError('Please upload a photograph.')
+    if (!file) {
+      setPhoto(null)
       return
     }
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
 
-    if (!allowedTypes.includes(photo.type)) {
-      setError('Please upload a JPG, PNG, or WebP image.')
+    if (!allowedTypes.includes(file.type)) {
+      setPhoto(null)
+      event.target.value = ''
+      setError('Please upload a JPG, PNG, or WEBP image.')
       return
     }
 
-    if (photo.size > 10 * 1024 * 1024) {
-      setError('Please select an image smaller than 10 MB.')
+    if (file.size > 5 * 1024 * 1024) {
+      setPhoto(null)
+      event.target.value = ''
+      setError('The photo must be smaller than 5 MB.')
       return
     }
+
+    setPhoto(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  function selectReportType(type: ReportType | null) {
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview)
+    }
+
+    setReportType(type)
+    setForm(initialForm)
+    setPhoto(null)
+    setPhotoPreview('')
+    setError('')
+    setSuccess('')
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
 
     setError('')
     setSuccess('')
+
+    const token = localStorage.getItem('misstrace_token')
+
+    if (!token) {
+      navigate('/login', { state: { from: '/add-person' } })
+      return
+    }
+
+    if (!reportType) {
+      setError('Please select a report type.')
+      return
+    }
+
+    if (!photo) {
+      setError('Please upload a photograph of the person.')
+      return
+    }
+
+    if (!form.name.trim()) {
+      setError('Please enter the person’s name, or enter "Unknown" if not known.')
+      return
+    }
+
+    if (!form.location.trim()) {
+      setError(
+        reportType === 'missing'
+          ? 'Please enter the last-known location.'
+          : 'Please enter the location where the person was found.',
+      )
+      return
+    }
+
+    if (!form.date) {
+      setError(
+        reportType === 'missing'
+          ? 'Please select the date the person was last seen.'
+          : 'Please select the date the person was found.',
+      )
+      return
+    }
+
+    if (form.date > new Date().toLocaleDateString('en-CA')) {
+      setError('The report date cannot be in the future.')
+      return
+    }
+
+    if (form.age) {
+      const age = Number(form.age)
+
+      if (!Number.isInteger(age) || age < 0 || age > 150) {
+        setError('Age must be a whole number between 0 and 150.')
+        return
+      }
+    }
+
+    if (reportType === 'missing' && !form.reporter_contact.trim()) {
+      setError('Please enter your contact information.')
+      return
+    }
+
+    const payload = new FormData()
+
+    payload.append('name', form.name.trim())
+
+    if (form.age) {
+      payload.append('age', form.age)
+    }
+
+    if (form.gender) {
+      payload.append('gender', form.gender)
+    }
+
+    payload.append(
+      reportType === 'missing' ? 'last_seen_location' : 'found_location',
+      form.location.trim(),
+    )
+
+    payload.append(
+      reportType === 'missing' ? 'last_seen_date' : 'found_date',
+      form.date,
+    )
+
+    if (form.time) {
+      payload.append(
+        reportType === 'missing' ? 'last_seen_time' : 'found_time',
+        form.time,
+      )
+    }
+
+    payload.append(
+      'clothing_description',
+      form.clothing_description.trim(),
+    )
+
+    payload.append(
+      'identifying_marks',
+      form.identifying_marks.trim(),
+    )
+
+    if (form.reporter_name.trim()) {
+      payload.append('reporter_name', form.reporter_name.trim())
+    }
+
+    if (form.reporter_contact.trim()) {
+      payload.append('reporter_contact', form.reporter_contact.trim())
+    }
+
+    payload.append('photo', photo)
+
+    if (reportType === 'missing') {
+      if (form.reporter_relationship.trim()) {
+        payload.append(
+          'reporter_relationship',
+          form.reporter_relationship.trim(),
+        )
+      }
+    } else {
+      if (form.authority_name.trim()) {
+        payload.append('authority_name', form.authority_name.trim())
+      }
+
+      if (form.case_reference.trim()) {
+        payload.append('case_reference', form.case_reference.trim())
+      }
+
+      if (form.additional_notes.trim()) {
+        payload.append('additional_notes', form.additional_notes.trim())
+      }
+    }
+
+    const endpoint =
+      reportType === 'missing'
+        ? '/api/persons'
+        : '/api/found-persons'
+
     setLoading(true)
 
     try {
-      const formData = new FormData()
-      formData.append('name', name.trim())
-
-      if (age) formData.append('age', age)
-      if (gender) formData.append('gender', gender)
-      if (location.trim()) {
-        formData.append('last_seen_location', location.trim())
-      }
-      if (date) formData.append('last_seen_date', date)
-
-      formData.append('photo', photo)
-
-      const response = await axios.post<{ message?: string }>(
-        '/api/persons',
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const response = await axios.post(endpoint, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      )
+      })
 
       setSuccess(
-        response.data?.message ?? 'Missing person added successfully.',
+        response.data?.message ||
+          (reportType === 'missing'
+            ? 'Missing-person report submitted successfully. It is awaiting review.'
+            : 'Found-person report submitted successfully. It is awaiting review.'),
       )
 
-      setName('')
-      setAge('')
-      setGender('')
-      setLocation('')
-      setDate('')
+      setForm(initialForm)
       setPhoto(null)
+
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview)
+      }
+
+      setPhotoPreview('')
 
       const fileInput = document.getElementById(
         'person-photo',
       ) as HTMLInputElement | null
 
-      if (fileInput) fileInput.value = ''
-
-      window.setTimeout(() => {
-        navigate('/missing-persons', { replace: true })
-      }, 1200)
-    } catch (err: unknown) {
+      if (fileInput) {
+        fileInput.value = ''
+      }
+    } catch (err) {
       if (axios.isAxiosError(err)) {
-        const status = err.response?.status
-        const responseData = err.response?.data as
-          | { error?: string; message?: string }
-          | undefined
-
-        if (!err.response) {
-          setError(
-            'Unable to connect to MissTrace. Check that the backend is running.',
-          )
-        } else if (status === 401 || status === 422) {
+        if (err.response?.status === 401) {
           localStorage.removeItem('misstrace_token')
-
-          navigate('/login', {
-            replace: true,
-            state: {
-              from: '/add-person',
-              message: 'Your session has expired. Please log in again.',
-            },
-          })
+          navigate('/login', { state: { from: '/add-person' } })
           return
-        } else if (status === 403) {
-          setError(
-            'Access denied. Only authorized administrators can add missing-person records.',
-          )
-        } else {
-          setError(
-            responseData?.error ??
-              responseData?.message ??
-              'Unable to add this record. Please try again.',
-          )
         }
+
+        // UPDATED: also show the backend "details" message (debug mode only)
+        const serverError =
+          err.response?.data?.error ||
+          'The report could not be submitted. Please try again.'
+        const serverDetails = err.response?.data?.details
+
+        setError(
+          serverDetails ? `${serverError} — ${serverDetails}` : serverError,
+        )
       } else {
-        setError('Something went wrong. Please try again.')
+        setError('An unexpected error occurred. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -155,266 +329,517 @@ export default function AddMissingPerson() {
   }
 
   return (
-    <section className="page-container py-8 sm:py-12">
-      <Link
-        to="/missing-persons"
-        className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-cyan-700"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to Missing Persons
-      </Link>
+    <main className="min-h-screen bg-[#061329] px-4 py-10 text-white sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl">
+        <Link
+          to="/search"
+          className="mb-8 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-cyan-300"
+        >
+          <ArrowLeft size={17} />
+          Back to search
+        </Link>
 
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-800">
-            <UserPlus className="h-6 w-6" aria-hidden="true" />
+        <header className="mb-9">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-cyan-300">
+            <ShieldCheck size={18} />
+            MissTrace Reporting Centre
           </div>
 
-          <h1 className="text-3xl font-bold tracking-tight text-navy-900 sm:text-4xl">
-            Add Missing Person
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Person Reporting Centre
           </h1>
 
-          <p className="mt-2 max-w-2xl text-slate-600">
-            Add a missing-person record so MissTrace can compare its facial
-            embedding against future search photographs.
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+            Report a missing person or someone you have found. Every
+            submission is reviewed before it is used for potential matching.
           </p>
-        </div>
+        </header>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-8"
-        >
-          {error && (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-800"
-            >
-              <AlertTriangle
-                className="mt-0.5 h-4 w-4 shrink-0"
-                aria-hidden="true"
-              />
-              {error}
-            </div>
-          )}
+        {!reportType ? (
+          <section>
+            <h2 className="mb-5 text-lg font-semibold">
+              What would you like to report?
+            </h2>
 
-          {success && (
-            <div
-              role="status"
-              className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"
-            >
-              <CheckCircle2
-                className="mt-0.5 h-4 w-4 shrink-0"
-                aria-hidden="true"
-              />
-              {success}
-            </div>
-          )}
-
-          <div>
-            <label
-              htmlFor="person-name"
-              className="mb-2 block text-sm font-semibold text-slate-800"
-            >
-              Full name <span className="text-red-500">*</span>
-            </label>
-
-            <input
-              id="person-name"
-              name="name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-              maxLength={150}
-              placeholder="Enter the person's full name"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
-            />
-          </div>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="person-age"
-                className="mb-2 block text-sm font-semibold text-slate-800"
+            <div className="grid gap-5 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => selectReportType('missing')}
+                className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-left transition hover:border-cyan-300/50 hover:bg-cyan-400/[0.04] sm:p-8"
               >
-                Age
-              </label>
-
-              <input
-                id="person-age"
-                name="age"
-                type="number"
-                min="0"
-                max="120"
-                value={age}
-                onChange={(event) => setAge(event.target.value)}
-                placeholder="Enter age"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="person-gender"
-                className="mb-2 block text-sm font-semibold text-slate-800"
-              >
-                Gender
-              </label>
-
-              <select
-                id="person-gender"
-                name="gender"
-                value={gender}
-                onChange={(event) => setGender(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
-              >
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-                <option value="Unknown">Unknown</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="person-location"
-              className="mb-2 block text-sm font-semibold text-slate-800"
-            >
-              Last seen location
-            </label>
-
-            <input
-              id="person-location"
-              name="last_seen_location"
-              value={location}
-              onChange={(event) => setLocation(event.target.value)}
-              maxLength={250}
-              placeholder="City, area, or last known location"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="person-date"
-              className="mb-2 block text-sm font-semibold text-slate-800"
-            >
-              Last seen date
-            </label>
-
-            <input
-              id="person-date"
-              name="last_seen_date"
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="person-photo"
-              className="mb-2 block text-sm font-semibold text-slate-800"
-            >
-              Photograph <span className="text-red-500">*</span>
-            </label>
-
-            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 transition hover:border-cyan-500">
-              <div className="flex items-start gap-3">
-                <FileImage
-                  className="mt-1 h-6 w-6 shrink-0 text-cyan-700"
-                  aria-hidden="true"
-                />
-
-                <div className="min-w-0 flex-1">
-                  <input
-                    id="person-photo"
-                    name="photo"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    required={!photo}
-                    onChange={(event) => {
-                      const selectedFile = event.target.files?.[0] ?? null
-                      setError('')
-
-                      if (selectedFile) {
-                        const allowedTypes = [
-                          'image/jpeg',
-                          'image/png',
-                          'image/webp',
-                        ]
-
-                        if (!allowedTypes.includes(selectedFile.type)) {
-                          setPhoto(null)
-                          event.target.value = ''
-                          setError('Please upload a JPG, PNG, or WebP image.')
-                          return
-                        }
-
-                        if (selectedFile.size > 10 * 1024 * 1024) {
-                          setPhoto(null)
-                          event.target.value = ''
-                          setError('Please select an image smaller than 10 MB.')
-                          return
-                        }
-                      }
-
-                      setPhoto(selectedFile)
-                    }}
-                    className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-navy-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-800"
-                  />
-
-                  <p className="mt-2 text-xs leading-5 text-slate-500">
-                    Upload a clear, front-facing photo in JPG, PNG, or WebP
-                    format. Maximum size: 10 MB.
-                  </p>
-
-                  {photo && (
-                    <p className="mt-2 break-all text-sm font-medium text-cyan-800">
-                      Selected: {photo.name}
-                    </p>
-                  )}
+                <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
+                  <Users size={29} />
                 </div>
+
+                <h3 className="text-xl font-semibold">
+                  Report a Missing Person
+                </h3>
+
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Report someone who has not been found yet. Provide their
+                  last-known details to help identify possible matches.
+                </p>
+
+                <div className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-cyan-300">
+                  Start missing-person report
+                  <ArrowRight
+                    size={17}
+                    className="transition group-hover:translate-x-1"
+                  />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => selectReportType('found')}
+                className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-left transition hover:border-emerald-300/50 hover:bg-emerald-400/[0.04] sm:p-8"
+              >
+                <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-300">
+                  <ShieldCheck size={29} />
+                </div>
+
+                <h3 className="text-xl font-semibold">
+                  Report a Found Person
+                </h3>
+
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Found someone who may be missing? Submit their details
+                  to help their family reconnect with them. Any registered
+                  user can submit a report.
+                </p>
+
+                <div className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                  Start found-person report
+                  <ArrowRight
+                    size={17}
+                    className="transition group-hover:translate-x-1"
+                  />
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] p-4">
+              <AlertCircle
+                size={20}
+                className="mt-0.5 shrink-0 text-amber-300"
+              />
+              <p className="text-sm leading-6 text-slate-400">
+                Please provide accurate information. Reports are reviewed
+                before matching, and a potential face match alone does not
+                confirm a person's identity.
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 sm:p-8">
+            <button
+              type="button"
+              onClick={() =>
+                selectReportType(reportType === 'missing' ? 'found' : 'missing')
+              }
+              className="mb-6 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-cyan-300"
+            >
+              <ArrowLeft size={16} />
+              Change report type
+            </button>
+
+            <div className="mb-8 flex items-start gap-4">
+              <div
+                className={`rounded-xl p-3 ${
+                  reportType === 'missing'
+                    ? 'bg-cyan-400/10 text-cyan-300'
+                    : 'bg-emerald-400/10 text-emerald-300'
+                }`}
+              >
+                {reportType === 'missing' ? (
+                  <Users size={25} />
+                ) : (
+                  <ShieldCheck size={25} />
+                )}
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold">
+                  {reportType === 'missing'
+                    ? 'Missing-Person Report'
+                    : 'Found-Person Report'}
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  {reportType === 'missing'
+                    ? "Enter the person's last-known details."
+                    : 'Enter the details of the person you found. You do not need to be a police officer to submit this report.'}
+                </p>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900">
-            <ShieldCheck
-              className="mt-0.5 h-5 w-5 shrink-0 text-blue-700"
-              aria-hidden="true"
-            />
-            <p>
-              The backend checks the photograph for a detectable face before
-              saving the record. Only submit information you are authorized
-              to provide.
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn btn-primary btn-lg flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? (
-              <>
-                <LoaderCircle
-                  className="h-5 w-5 animate-spin"
-                  aria-hidden="true"
-                />
-                Adding Record...
-              </>
-            ) : (
-              <>
-                <UserPlus className="h-5 w-5" aria-hidden="true" />
-                Add Missing Person
-              </>
+            {error && (
+              <div
+                role="alert"
+                className="mb-6 flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200"
+              >
+                <AlertCircle size={19} className="mt-0.5 shrink-0" />
+                <p>{error}</p>
+              </div>
             )}
-          </button>
-        </form>
+
+            {success && (
+              <div
+                role="status"
+                className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200"
+              >
+                <CheckCircle2 size={19} className="mt-0.5 shrink-0" />
+                <p>{success}</p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div>
+                <h3 className="mb-4 flex items-center gap-2 font-semibold">
+                  <UserRound size={18} className="text-cyan-300" />
+                  Person's Information
+                </h3>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    Full name
+                    <input
+                      name="name"
+                      value={form.name}
+                      onChange={updateField}
+                      className={inputClass}
+                      placeholder="Enter name or Unknown"
+                      required
+                    />
+                  </label>
+
+                  <label className={labelClass}>
+                    Age
+                    <input
+                      name="age"
+                      type="number"
+                      min="0"
+                      max="150"
+                      value={form.age}
+                      onChange={updateField}
+                      className={inputClass}
+                      placeholder="Approximate age"
+                    />
+                  </label>
+
+                  <label className={labelClass}>
+                    Gender
+                    <select
+                      name="gender"
+                      value={form.gender}
+                      onChange={updateField}
+                      className={inputClass}
+                    >
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                      <option value="Unknown">Unknown</option>
+                    </select>
+                  </label>
+
+                  <div>
+                    <label htmlFor="person-photo" className={labelClass}>
+                      Photograph
+                    </label>
+
+                    <label
+                      htmlFor="person-photo"
+                      className="mt-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/20 bg-[#0a1b33] p-4 transition hover:border-cyan-300/50"
+                    >
+                      <Upload size={21} className="shrink-0 text-cyan-300" />
+
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm text-slate-200">
+                          {photo ? photo.name : 'Choose a photograph'}
+                        </span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          JPG, PNG or WEBP · Maximum 5 MB
+                        </span>
+                      </span>
+                    </label>
+
+                    <input
+                      id="person-photo"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                      onChange={handlePhotoChange}
+                      className="sr-only"
+                    />
+
+                    {photoPreview && (
+                      <img
+                        src={photoPreview}
+                        alt="Selected person"
+                        className="mt-4 h-40 w-40 rounded-xl border border-white/10 object-cover"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-4 flex items-center gap-2 font-semibold">
+                  <MapPin size={18} className="text-cyan-300" />
+                  {reportType === 'missing'
+                    ? 'Last-Seen Information'
+                    : 'Found Location Information'}
+                </h3>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className={`${labelClass} sm:col-span-2`}>
+                    {reportType === 'missing'
+                      ? 'Last-known location'
+                      : 'Location where the person was found'}
+
+                    <input
+                      name="location"
+                      value={form.location}
+                      onChange={updateField}
+                      className={inputClass}
+                      placeholder="Area, city, or address"
+                      required
+                    />
+                  </label>
+
+                  <label className={labelClass}>
+                    <span className="flex items-center gap-2">
+                      <CalendarDays size={15} />
+                      {reportType === 'missing' ? 'Last seen on' : 'Found on'}
+                    </span>
+
+                    <input
+                      name="date"
+                      type="date"
+                      value={form.date}
+                      onChange={updateField}
+                      max={new Date().toLocaleDateString('en-CA')}
+                      className={inputClass}
+                      required
+                    />
+                  </label>
+
+                  <label className={labelClass}>
+                    <span className="flex items-center gap-2">
+                      <Clock size={15} />
+                      {reportType === 'missing' ? 'Last seen at' : 'Found at'}
+                    </span>
+
+                    <input
+                      name="time"
+                      type="time"
+                      value={form.time}
+                      onChange={updateField}
+                      className={inputClass}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-4 font-semibold">
+                  Physical Description
+                </h3>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    Clothing description
+                    <textarea
+                      name="clothing_description"
+                      value={form.clothing_description}
+                      onChange={updateField}
+                      className={`${inputClass} min-h-28 resize-y`}
+                      placeholder="Describe clothing, colours, and accessories"
+                    />
+                  </label>
+
+                  <label className={labelClass}>
+                    Identifying marks
+                    <textarea
+                      name="identifying_marks"
+                      value={form.identifying_marks}
+                      onChange={updateField}
+                      className={`${inputClass} min-h-28 resize-y`}
+                      placeholder="Scars, birthmarks, tattoos, or other identifying details"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {reportType === 'missing' ? (
+                <div>
+                  <h3 className="mb-4 font-semibold">
+                    Reporter Information
+                  </h3>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className={labelClass}>
+                      Your name
+                      <input
+                        name="reporter_name"
+                        value={form.reporter_name}
+                        onChange={updateField}
+                        className={inputClass}
+                        placeholder="Your full name"
+                      />
+                    </label>
+
+                    <label className={labelClass}>
+                      Relationship to the person
+                      <select
+                        name="reporter_relationship"
+                        value={form.reporter_relationship}
+                        onChange={updateField}
+                        className={inputClass}
+                      >
+                        <option value="">Select relationship</option>
+                        <option value="Parent">Parent</option>
+                        <option value="Spouse">Spouse</option>
+                        <option value="Sibling">Sibling</option>
+                        <option value="Relative">Other relative</option>
+                        <option value="Friend">Friend</option>
+                        <option value="Police">Police personnel</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </label>
+
+                    <label className={`${labelClass} sm:col-span-2`}>
+                      Contact information
+                      <input
+                        name="reporter_contact"
+                        type="text"
+                        value={form.reporter_contact}
+                        onChange={updateField}
+                        className={inputClass}
+                        placeholder="Phone number or other contact information"
+                        required
+                      />
+                      <span className="mt-2 block text-xs leading-5 text-slate-500">
+                        Your contact information must not be exposed in
+                        public search results.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="mb-4 flex items-center gap-2 font-semibold">
+                    <Users size={18} className="text-emerald-300" />
+                    Your Information
+                  </h3>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className={labelClass}>
+                      Your name
+                      <input
+                        name="reporter_name"
+                        value={form.reporter_name}
+                        onChange={updateField}
+                        className={inputClass}
+                        placeholder="Your full name"
+                      />
+                    </label>
+
+                    <label className={labelClass}>
+                      Contact information
+                      <input
+                        name="reporter_contact"
+                        value={form.reporter_contact}
+                        onChange={updateField}
+                        className={inputClass}
+                        placeholder="Phone number or email (optional)"
+                      />
+                    </label>
+
+                    <label className={labelClass}>
+                      Police station or organization (optional)
+                      <input
+                        name="authority_name"
+                        value={form.authority_name}
+                        onChange={updateField}
+                        className={inputClass}
+                        placeholder="If applicable"
+                      />
+                    </label>
+
+                    <label className={labelClass}>
+                      Case reference (optional)
+                      <input
+                        name="case_reference"
+                        value={form.case_reference}
+                        onChange={updateField}
+                        className={inputClass}
+                        placeholder="Official reference, if available"
+                      />
+                    </label>
+
+                    <label className={`${labelClass} sm:col-span-2`}>
+                      Additional notes
+                      <textarea
+                        name="additional_notes"
+                        value={form.additional_notes}
+                        onChange={updateField}
+                        className={`${inputClass} min-h-28 resize-y`}
+                        placeholder="Other useful details about where or how the person was found"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] p-4 text-sm leading-6 text-slate-400">
+                    Anyone with a registered MissTrace account can submit a
+                    found-person report. Reports remain pending until reviewed.
+                    Keep contact information private and contact local
+                    authorities if someone may be in danger.
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => selectReportType(reportType)}
+                  className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/5"
+                >
+                  Clear form
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-[#061329] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    reportType === 'missing'
+                      ? 'bg-cyan-400 hover:bg-cyan-300'
+                      : 'bg-emerald-300 hover:bg-emerald-200'
+                  }`}
+                >
+                  {loading ? 'Submitting report...' : 'Submit report'}
+                  {!loading && <ArrowRight size={17} />}
+                </button>
+              </div>
+
+              <p className="text-xs leading-5 text-slate-500">
+                Submission does not confirm identity or recovery. Reports must
+                be reviewed, and potential matches must be independently
+                verified.
+              </p>
+            </form>
+          </section>
+        )}
+
+        <footer className="mt-8 flex items-start gap-3 text-xs leading-5 text-slate-500">
+          <FileText size={17} className="mt-0.5 shrink-0" />
+          <p>
+            MissTrace supports community missing-person reporting and
+            potential-match discovery. It does not replace official
+            procedures or identity verification.
+          </p>
+        </footer>
       </div>
-    </section>
+    </main>
   )
 }

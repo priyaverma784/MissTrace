@@ -24,15 +24,15 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Pages available to logged-in users */}
+        {/* Pages available to all logged-in users */}
         <Route element={<ProtectedRoute />}>
           <Route path="/search" element={<Search />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/add-person" element={<AddMissingPerson />} />
         </Route>
 
-        {/* Administrator pages */}
+        {/* Administrator-only pages */}
         <Route element={<ProtectedRoute adminOnly />}>
-          <Route path="/add-person" element={<AddMissingPerson />} />
           <Route path="/missing-persons" element={<MissingPersons />} />
         </Route>
 

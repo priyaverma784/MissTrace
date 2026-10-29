@@ -8,6 +8,7 @@ const navItems = [
   { label: 'About', to: '/about', end: false },
   { label: 'Features', to: '/features', end: false },
   { label: 'Find Missing Person', to: '/search', end: false },
+  { label: 'Report a Person', to: '/add-person', end: false },
   { label: 'Help', to: '/help', end: false },
 ]
 
