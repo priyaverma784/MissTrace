@@ -15,8 +15,8 @@ __pycache__/
 Backend/instance/
 Backend/uploads/
 *.db
-
-# One-off admin helper scripts
+ 
+#admin
 Backend/make_admin.py
 Backend/check_db.py
 
