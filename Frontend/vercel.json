@@ -10,5 +10,5 @@
       "framework": "vite"
     }
   },
-  "rewrites": []
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }
