@@ -15,10 +15,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 app = Flask(__name__)
 
-CORS(app, origins=[
-    "https://your-app.vercel.app",
-    "http://localhost:5173",
-])
+CORS(app)
 
 app.config["JWT_SECRET_KEY"] = os.environ["JWT_SECRET_KEY"]
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
