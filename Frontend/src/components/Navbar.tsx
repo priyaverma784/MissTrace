@@ -51,12 +51,15 @@ export default function Navbar() {
       return
     }
 
-    axios
-      .get<UserResponse>('/api/auth/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
+       axios
+      .get<UserResponse>(
+      `${import.meta.env.VITE_API_BASE_URL}/api/auth/me`,
+      {
+         headers: {
+         Authorization: `Bearer ${token}`,
         },
-      })
+       },
+      )
       .then((response) => {
         if (!cancelled) {
           setUser(response.data.user)

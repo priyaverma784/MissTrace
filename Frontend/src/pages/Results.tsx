@@ -59,13 +59,18 @@ function MatchedPersonPhoto({ personId }: { personId: number }) {
       return
     }
 
-    axios
-      .get(`/api/persons/${personId}/photo`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+    
+      axios
+     .get(
+     `${import.meta.env.VITE_API_BASE_URL}/api/persons/${personId}/photo`,
+     {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      responseType: 'blob',
         },
-        responseType: 'blob',
-      })
+      )
+
       .then((response) => {
         if (!active) return
 

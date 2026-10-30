@@ -102,13 +102,13 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const response = await axios.post<LoginResponse>(
-        '/api/auth/login',
+        const response = await axios.post<LoginResponse>(
+         `${import.meta.env.VITE_API_BASE_URL}/api/auth/login`,
         {
-          email: email.trim(),
-          password,
-        },
-      )
+           email: email.trim(),
+        password,
+          },
+         )
 
       const token = response.data.access_token ?? response.data.token
 

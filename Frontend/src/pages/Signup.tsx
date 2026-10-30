@@ -120,15 +120,16 @@ export default function Signup() {
 
     setLoading(true)
 
-    try {
-      const response = await axios.post<SignupResponse>(
-        '/api/auth/signup',
-        {
-          name: name.trim(),
-          email: email.trim(),
-          password,
-        },
-      )
+try {
+  const response = await axios.post<SignupResponse>(
+    `${import.meta.env.VITE_API_BASE_URL}/api/auth/signup`,
+    {
+      name: name.trim(),
+      email: email.trim(),
+      password,
+    },
+  )
+
 
       navigate('/login', {
         replace: true,

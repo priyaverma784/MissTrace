@@ -210,23 +210,25 @@ export default function MissingPersons() {
     setActionError('')
     setNotice('')
 
-    try {
-      await axios.put(
-        `/api/persons/${editingId}`,
-        {
-          name: trimmedName,
-          age: form.age.trim() ? Number(form.age) : null,
-          gender: form.gender || null,
-          last_seen_location: form.last_seen_location.trim() || null,
-          last_seen_date: form.last_seen_date || null,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      )
+       
+     try {
+     await axios.put(
+      `${import.meta.env.VITE_API_BASE_URL}/api/persons/${editingId}`,
+     {
+      name: trimmedName,
+      age: form.age.trim() ? Number(form.age) : null,
+      gender: form.gender || null,
+      last_seen_location: form.last_seen_location.trim() || null,
+      last_seen_date: form.last_seen_date || null,
+     },
+     {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+       },
+      },
+     ) 
+
 
       setEditingId(null)
       setForm(emptyForm)

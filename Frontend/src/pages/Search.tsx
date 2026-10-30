@@ -149,15 +149,17 @@ export default function Search() {
       const formData = new FormData()
       formData.append('photo', file)
 
+     
       const response = await axios.post<SearchResponse>(
-        '/api/search',
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
+      `${import.meta.env.VITE_API_BASE_URL}/api/search`,
+      formData,
+      {
+      headers: {
+         Authorization: `Bearer ${token}`,
+      },
+    },
+    )
+
 
       const results = toResults(response.data)
 

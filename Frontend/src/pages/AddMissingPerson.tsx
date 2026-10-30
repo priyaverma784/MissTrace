@@ -273,12 +273,18 @@ export default function AddMissingPerson() {
 
     setLoading(true)
 
-    try {
-      const response = await axios.post(endpoint, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+     
+      try {
+      const response = await axios.post(
+    `${import.meta.env.VITE_API_BASE_URL}${endpoint}`,
+     payload,
+     {
+       headers: {
+        Authorization: `Bearer ${token}`,
+       },
+     },
+    )
+
 
       setSuccess(
         response.data?.message ||

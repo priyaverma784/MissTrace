@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import axios from 'axios'
-
 interface UserResponse {
   user: {
     id: number
@@ -10,7 +9,6 @@ interface UserResponse {
     role: string
   }
 }
-
 interface ProtectedRouteProps {
   adminOnly?: boolean
 }
@@ -35,17 +33,21 @@ export default function ProtectedRoute({
     if (!token) {
       setLoading(false)
       setUnauthorized(true)
+
       return () => {
         active = false
       }
     }
 
     axios
-      .get<UserResponse>('/api/auth/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      .get<UserResponse>(
+        `${import.meta.env.VITE_API_BASE_URL}/api/auth/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      })
+      )
       .then((response) => {
         if (active) {
           setRole(response.data.user.role)
