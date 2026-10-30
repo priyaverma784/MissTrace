@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Heart,
   ScanFace,
-  Search,
   ShieldCheck,
   Target,
   Users,
